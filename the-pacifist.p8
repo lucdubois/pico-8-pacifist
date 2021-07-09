@@ -411,8 +411,8 @@ end
 
 Player = Shape:new{
     sprite = 0,
-    x=60,
-    y=60,
+    x=64,
+    y=64,
     max_dx=3,
     max_dy=3,
     acc = 0.15,
