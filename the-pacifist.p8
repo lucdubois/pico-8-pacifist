@@ -481,7 +481,7 @@ function getTriPointCollision(x1, y1, x2, y2, x3, y3, px, py)
     local area1 =    abs( (x1-px)*(y2-py)-(x2-px)*(y1-py))
     local area2 =    abs( (x2-px)*(y3-py)-(x3-px)*(y2-py))
     local area3 =    abs( (x3-px)*(y1-py)-(x1-px)*(y3-py))
-    if (area1 + area2 + area3 == areaOrig) then
+    if (flr(area1 + area2 + area3) == flr(areaOrig)) then
         return true;
     end
     return false;
