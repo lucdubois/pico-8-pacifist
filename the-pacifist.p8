@@ -4,7 +4,7 @@ __lua__
 
 offset = 0
 shaking = false
-shake_timer=0
+shake_timer=10
 score=0
 multiplier=1
 highscore=0
@@ -12,12 +12,14 @@ lives=3
 gtms=0
 message='the pacifist'
 messageTimer=180
+bombInUse=false
+bombTimer=40
 
 function _init()
     save('@clip')
     offset = 0
     shaking = false
-    shake_timer=0
+    shake_timer=10
     score=0
     multiplier=1
     music(0)
@@ -28,9 +30,9 @@ function newRound()
     gates = {}
     offset = 0
     shaking = false
-    shake_timer=0
+    shake_timer=10
     multiplier=1
-    player = Player:new{}
+    p = Player:new{}
     lives -=1
 end
 
@@ -56,27 +58,38 @@ function enemyCanSpawn(en)
     if (en.y < 2) then en.y = 2 end
     if (en.x > 126) then en.x = 126 end
     if (en.y > 126) then en.y = 126 end
-    if getDist(en.x, en.y, player.x, player.y) < 42 then return false end
+    if getDist(en.x, en.y, p.x, p.y) < 42 then return false end
 
-    local pa = player.angle-90%360
+    local pa = p.angle-90%360
     print(''..pa, 20, 20, 1)
     local angle1 = (pa-30)/360
     local angle2 = (pa+30)/360
-    local x1 = (sin(angle1)*100)+player.x
-    local y1 = (cos(angle1)*100)+player.y
-    local x2 = (sin(angle2)*100)+player.x
-    local y2 = (cos(angle2)*100)+player.y
-    if getTriPointCollision(x1, y1, x2, y2, player.x, player.y, en.x, en.y) == true then return false end
+    local x1 = (sin(angle1)*100)+p.x
+    local y1 = (cos(angle1)*100)+p.y
+    local x2 = (sin(angle2)*100)+p.x
+    local y2 = (cos(angle2)*100)+p.y
+    if getTriPointCollision(x1, y1, x2, y2, p.x, p.y, en.x, en.y) == true then return false end
     return true
 end
 
 function spawnEnemy(en)
     repeat
         local angle = rnd()
-        en.x = ((rnd(20)+42)*sin(angle))+player.x
-        en.y = ((rnd(20)+42)*cos(angle))+player.y
+        en.x = ((rnd(20)+42)*sin(angle))+p.x
+        en.y = ((rnd(20)+42)*cos(angle))+p.y
     until enemyCanSpawn(en) == true
     add(enemies, en)
+end
+
+function useBomb()
+    bombInUse = true
+    shake_timer = 60
+    shaking = true
+    music(-1)
+    sfx(4)
+    for en in all(enemies) do
+        en:die()
+    end
 end
 function spawnTrail(o, r)
         local ang = rnd()
@@ -92,7 +105,7 @@ function spawnTrail(o, r)
 end
 
 function _update60() --called at 60fps
-    if (player.dead == true and shake_timer == 10) then
+    if (p.dead == true and shake_timer == 0) then
         if lives>=2 then 
             newRound()
         else
@@ -102,14 +115,23 @@ function _update60() --called at 60fps
     end
     gtms+=1
     local gt = gtms/60
-    if shake_timer == 10 then
+    if shake_timer == 0 then
         shaking = false
-        shake_timer = 0
+        shake_timer = 10
         offset=0
     end
     if shaking == true then 
-        shake_timer+=1 
+        shake_timer-=1 
         offset=0.1
+    end
+    if bombTimer == 0 then 
+        bombInUse = false
+        bombTimer = 40
+        music(3, 200)
+    end
+    if bombInUse == true then 
+        enemies = {}
+        bombTimer -= 1
     end
     if (gt % 3 == 0) then
         local en = EasyE:new{}
@@ -142,13 +164,13 @@ function _update60() --called at 60fps
     if (gt % 5 == 0) then
         local gate = MovingGate:new{}
         gate.angle = rnd(0.5)+0.5;
-        gate.halfCircleSin = sin(gate.angle);
-        gate.centerPosX = rnd(116);
-        gate.centerPosY = rnd(116);
-        gate.x1 = gate.centerPosX+(10*gate.halfCircleSin);
-        gate.x2 = gate.centerPosX+(-10*gate.halfCircleSin);
-        gate.y1 = gate.centerPosY+(10*(1-gate.halfCircleSin));
-        gate.y2 = gate.centerPosY+(-10*(1-gate.halfCircleSin));
+        local s = sin(gate.angle);
+        gate.cx = rnd(116);
+        gate.cy = rnd(116);
+        gate.x1 = gate.cx+(10*s);
+        gate.x2 = gate.cx+(-10*s);
+        gate.y1 = gate.cy+(10*(1-s));
+        gate.y2 = gate.cy+(-10*(1-s));
         gate.dx = rnd(gate.max_dx)
         gate.dy = rnd(gate.max_dy)
         gate.dangle = rnd(0.012)-0.006
@@ -156,69 +178,72 @@ function _update60() --called at 60fps
     end
 
 
-    player.dx*=player.friction
-    player.dy*=player.friction
-    local angle = player.angle%360
+    p.dx*=p.friction
+    p.dy*=p.friction
+    local angle = p.angle%360
     if (btn(0)) then 
-        player.dx-=player.acc
-        spawnTrail(player, 4)
-        if angle > 180 then player.angle-=10 end
-        if angle < 180 then player.angle+=10 end
+        p.dx-=p.acc
+        spawnTrail(p, 4)
+        if angle > 180 then p.angle-=10 end
+        if angle < 180 then p.angle+=10 end
     end -- left
     if (btn(1)) then 
-        player.dx+=player.acc
-        spawnTrail(player, 4)
+        p.dx+=p.acc
+        spawnTrail(p, 4)
         if angle != 0 then
-            if angle > 180 then player.angle+=10 end
-            if angle <= 180 then player.angle-=10 end
+            if angle > 180 then p.angle+=10 end
+            if angle <= 180 then p.angle-=10 end
         end
     end -- right
     if (btn(2)) then 
-        player.dy-=player.acc
-        spawnTrail(player, 4)
-        if ((angle <= 90 and angle >= 0) or angle > 270 ) then player.angle-=10 end
-        if ((angle > 90 and angle <= 180) or (angle < 270 and angle >180)) then player.angle+=10 end
+        p.dy-=p.acc
+        spawnTrail(p, 4)
+        if ((angle <= 90 and angle >= 0) or angle > 270 ) then p.angle-=10 end
+        if ((angle > 90 and angle <= 180) or (angle < 270 and angle >180)) then p.angle+=10 end
     end -- up
     if (btn(3)) then 
-        player.dy+=player.acc
-        spawnTrail(player, 4)
-        if ((angle < 90 and angle >= 0) or angle > 270 ) then player.angle+=10 end
-        if (angle > 90 or (angle < 270 and angle >=180)) then player.angle-=10 end
+        p.dy+=p.acc
+        spawnTrail(p, 4)
+        if ((angle < 90 and angle >= 0) or angle > 270 ) then p.angle+=10 end
+        if (angle > 90 or (angle < 270 and angle >=180)) then p.angle-=10 end
     end -- down
-    -- if angle == 0 then player.angle = 0 end
-    player.dx=mid(-player.max_dx,player.dx,player.max_dx)
-    player.dy=mid(-player.max_dy,player.dy,player.max_dy)
+    if (btn(4)) then
+        useBomb()
+    end
+    -- if angle == 0 then p.angle = 0 end
+    p.dx=mid(-p.max_dx,p.dx,p.max_dx)
+    p.dy=mid(-p.max_dy,p.dy,p.max_dy)
 
-    player.x+=player.dx
-    player.y+=player.dy
-    if (player.x>124) then player.x=124 end
-    if (player.x<4) then player.x=4 end
-    if (player.y>124) then player.y=124 end
-    if (player.y<4) then player.y=4 end
+    p.x+=p.dx
+    p.y+=p.dy
+    if (p.x>124) then p.x=124 end
+    if (p.x<4) then p.x=4 end
+    if (p.y>124) then p.y=124 end
+    if (p.y<4) then p.y=4 end
     
     for gate in all(gates) do
-        gate.centerPosX+=gate.dx
-        gate.centerPosY+=gate.dy
+        gate.cx+=gate.dx
+        gate.cy+=gate.dy
         gate.angle+=gate.dangle
         if (gate.angle>=1) then gate.angle-=1 end
         local gateSin = sin(gate.angle)
         local gateCos = cos(gate.angle)
-        gate.x1 = gate.centerPosX+(10*gateSin);
-        gate.x2 = gate.centerPosX+(-10*gateSin);
-        gate.y1 = gate.centerPosY+(10*(gateCos));
-        gate.y2 = gate.centerPosY+(-10*(gateCos));
+        gate.x1 = gate.cx+(10*gateSin);
+        gate.x2 = gate.cx+(-10*gateSin);
+        gate.y1 = gate.cy+(10*(gateCos));
+        gate.y2 = gate.cy+(-10*(gateCos));
         
-        if (gate.centerPosX>120 or gate.centerPosX<0) then gate.dx*=-1 end
-        if (gate.centerPosY>120 or gate.centerPosY<0) then gate.dy*=-1 end
+        if (gate.cx>120 or gate.cx<0) then gate.dx*=-1 end
+        if (gate.cy>120 or gate.cy<0) then gate.dy*=-1 end
         
-        if (getPointCircleCollision(gate.x1, gate.y1, player.x, player.y, 2) or getPointCircleCollision(gate.x2, gate.y2, player.x, player.y, 2) ) then 
-            player.dx = player.dx*-1
-            player.dy = player.dy*-1
-        elseif (isTouchingPlayer(gate.x1, gate.y1, gate.x2, gate.y2, player.x, player.y)) then
+        if (getPointCircleCollision(gate.x1, gate.y1, p.x, p.y, 2) or getPointCircleCollision(gate.x2, gate.y2, p.x, p.y, 2) ) then 
+            p.dx = p.dx*-1
+            p.dy = p.dy*-1
+        elseif (isTouchingPlayer(gate.x1, gate.y1, gate.x2, gate.y2, p.x, p.y)) then
             local soundPlayed = false
             local enemiesKilled = 0
             for enemy in all(enemies) do
-                if (getPointCircleCollision(enemy.x, enemy.y, gate.centerPosX, gate.centerPosY, 40) == true) then
+                if (getPointCircleCollision(enemy.x, enemy.y, gate.cx, gate.cy, 40) == true) then
                     if soundPlayed == false then
                         sfx(1)
                         soundPlayed = true
@@ -235,7 +260,7 @@ function _update60() --called at 60fps
             for i=1,20,1 do
                 local dx = rnd(10)-5
                 local dy = rnd(10)-5
-                local particle = Particle:new{x=gate.centerPosX, y=gate.centerPosY, dx = dx, dy = dy}
+                local particle = Particle:new{x=gate.cx, y=gate.cy, dx = dx, dy = dy}
                 add(particles, particle)
             end
             del(gates, gate)
@@ -244,15 +269,15 @@ function _update60() --called at 60fps
     end
     for enemy in all(enemies) do
 		enemy:move()
-        if (getPointCircleCollision(enemy.x, enemy.y, player.x, player.y, 2) == true) then
+        if (getPointCircleCollision(enemy.x, enemy.y, p.x, p.y, 2) == true) then
             shaking = true
             sfx(2)
             for i=1,40,1 do
                 local dx = rnd(4)-2
                 local dy = rnd(4)-2
-                local particle = Particle:new{x=player.x, y=player.y, dx = dx, dy = dy, color = 7, max_frames= 60}
+                local particle = Particle:new{x=p.x, y=p.y, dx = dx, dy = dy, color = 7, max_frames= 60}
                 add(particles, particle)
-                player.dead = true
+                p.dead = true
             end
             for enemy2 in all(enemies) do 
                 enemy2:die() 
@@ -265,6 +290,7 @@ function _update60() --called at 60fps
 end
 
 function _draw()
+    palt(0, false)
     screen_shake()
     cls() -- clear screen
     palt(0, true)
@@ -278,21 +304,13 @@ function _draw()
     for gate in all(gates) do
         circfill(gate.x1,gate.y1,1,10)
         circfill(gate.x2,gate.y2,1,10)
-        circ(gate.centerPosX, gate.centerPosY, 40, 1)
+        circ(gate.cx, gate.cy, 40, 1)
         line(gate.x1, gate.y1, gate.x2, gate.y2, 11)
     end
     -- drawTriangle()
-    spr_r(lives-1, player.x-4, player.y-4, player.angle, 1, 1) -- draw the sprite using the values of our player object 
+    spr_r(lives-1, p.x-4, p.y-4, p.angle, 1, 1) -- draw the sprite using the values of our p object 
     for enemy in all(enemies) do
-		circfill(enemy.x,enemy.y,2,enemy.color)
-        local edistx = player.x - enemy.x
-        local edisty = player.y - enemy.y
-        local edist = sqrt((edistx*edistx) + (edisty*edisty))
-        local diffx =  enemy.x - player.x
-        local diffy = enemy.y - player.y 
-        local angle = atan2(diffx, diffy*-1)
-        local dx = sin(angle)
-        local dy = cos(angle)
+		enemy:draw()
         -- print(''..dx,
         -- 0,0, 6)
         -- print(''..dy,
@@ -304,29 +322,120 @@ function _draw()
     end
         
     drawMessage()
+    if (bombInUse == true and bombTimer == 0) then
+        pal(0, 0)
+        pal(1, 1)
+        pal(2, 2)
+        pal(3, 3)
+        pal(4, 4)
+        pal(5, 5)
+        pal(6, 6)
+        pal(7, 7)
+        pal(8, 8)
+        pal(9, 9)
+        pal(10, 10)
+        pal(11, 11)
+        pal(12, 12)
+        pal(13, 13)
+        pal(14, 14)
+        pal(15, 15)
+    end
+    if (bombInUse == true and bombTimer > 27 and bombTimer <= 35) then
+        pal(0, 7)
+        pal(1, 7)
+        pal(2, 7)
+        pal(3, 7)
+        pal(4, 7)
+        pal(5, 7)
+        pal(6, 7)
+        pal(7, 7)
+        pal(8, 7)
+        pal(9, 7)
+        pal(10, 7)
+        pal(11, 7)
+        pal(12, 7)
+        pal(13, 7)
+        pal(14, 7)
+        pal(15, 7)
+    end
+    if (bombInUse == true and bombTimer > 20 and bombTimer <= 27) then
+        pal(0, 6)
+        pal(1, 7)
+        pal(2, 7)
+        pal(3, 7)
+        pal(4, 7)
+        pal(5, 7)
+        pal(6, 7)
+        pal(7, 7)
+        pal(8, 7)
+        pal(9, 7)
+        pal(10, 7)
+        pal(11, 7)
+        pal(12, 7)
+        pal(13, 7)
+        pal(14, 7)
+        pal(15, 7)
+    end
+    if (bombInUse == true and bombTimer > 10 and bombTimer <= 20) then
+        pal(0, 5)
+        pal(1, 6)
+        pal(2, 8)
+        pal(3, 1)
+        pal(4, 9)
+        pal(5, 7)
+        pal(6, 7)
+        pal(7, 7)
+        pal(8, 14)
+        pal(9, 15)
+        pal(10, 15)
+        pal(11, 7)
+        pal(12, 7)
+        pal(13, 7)
+        pal(14, 7)
+        pal(15, 7)
+    end
+    if (bombInUse == true and ((bombTimer > 0 and bombTimer <= 10) or bombTimer > 35)) then
+        pal(0, 1)
+        pal(1, 12)
+        pal(2, 8)
+        pal(3, 1)
+        pal(4, 9)
+        pal(5, 6)
+        pal(6, 6)
+        pal(7, 7)
+        pal(8, 14)
+        pal(9, 15)
+        pal(10, 15)
+        pal(11, 7)
+        pal(12, 7)
+        pal(13, 7)
+        pal(14, 7)
+        pal(15, 7)
+    end
 end
 
 function drawTriangle()
-    local pa = player.angle-90%360
+    local pa = p.angle-90%360
     print(''..pa, 20, 20, 1)
     local angle1 = (pa-30)/360
     local angle2 = (pa+30)/360
-    local x1 = (sin(angle1)*100)+player.x
-    local y1 = (cos(angle1)*100)+player.y
-    local x2 = (sin(angle2)*100)+player.x
-    local y2 = (cos(angle2)*100)+player.y
+    local x1 = (sin(angle1)*100)+p.x
+    local y1 = (cos(angle1)*100)+p.y
+    local x2 = (sin(angle2)*100)+p.x
+    local y2 = (cos(angle2)*100)+p.y
     local color = 1
     for en in all(enemies) do
-        if getTriPointCollision(x1, y1, x2, y2, player.x, player.y, en.x, en.y) == true then color = 11 end
+        if getTriPointCollision(x1, y1, x2, y2, p.x, p.y, en.x, en.y) == true then color = 11 end
     end
-    line (player.x, player.y, x1, y1, color)
-    line (player.x, player.y, x2, y2, color)
+    line (p.x, p.y, x1, y1, color)
+    line (p.x, p.y, x2, y2, color)
     line (x1, y1, x2, y2, color)
 end
 
 function drawMatrix()
-    local xmod = (player.x-60)/6
-    local ymod = (player.y-60)/6
+    rectfill(-20, -20, 148, 148, 0)
+    local xmod = (p.x-60)/6
+    local ymod = (p.y-60)/6
     for x=-64-xmod,192-xmod,16 do
         line(x, -64, x, 192, 1)
     end
@@ -369,10 +478,9 @@ MovingGate = {x1=0,
     x2=0,
     y1=10,
     y2=0,
-    centerPosX=0,
-    centerPosY=0,
+    cx=0,
+    cy=0,
     angle=0,
-    halfCircleSin=0,
     exploding=false,
     max_dx=0.3,
     max_dy=0.3,
@@ -448,11 +556,25 @@ FastE = Shape:new{
     acc = 0.05,
     friction=0.78,
     color=14,
+    colors={14, 7},
     timer=180,
     activeTime=60,
     angle=0,
-    points=10
+    points=10,
+    signaling=false,
+    cr=0,
+    crd=0.5
 }
+
+function Shape:draw() 
+    circfill(self.x,self.y,2,self.color)
+end
+function FastE:draw() 
+    if (self.signaling == true) then
+        circ(self.x, self.y, self.cr, 1)
+    end
+    circfill(self.x,self.y,2,self.color)
+end
 
 function getDist(x1, y1, x2, y2)
     local distx = x1 - x2
@@ -503,8 +625,8 @@ function isTouchingPlayer(gateX1, gateY1, gateX2, gateY2, playerX, playerY)
 end
 
 function Shape:move()
-    local diffx =  self.x - player.x
-    local diffy = self.y - player.y
+    local diffx =  self.x - p.x
+    local diffy = self.y - p.y
     local angle = atan2(diffx, diffy*-1)
     self.dx += self.acc*(cos(angle)*-1)
     self.dy += self.acc*sin(angle)
@@ -528,13 +650,32 @@ function Shape:die()
     end
 end
 
+function FastE:manageRipple()
+
+    if (self.cr <=7 and self.signaling == true) then
+        self.cr+=self.crd
+    elseif (self.cr >7 and self.signaling == true) then
+        self.cr = 0
+        self.signaling = false
+    end
+        
+end
+
 function FastE:move()
     self.timer+=-1
-    if (self.timer == 0) then
+    if self.signaling == true then
+        self:manageRipple()
+    end
+    if ((self.timer >= 60 and self.timer%30 == 0) or (self.timer < 60 and self.timer >= 0 and self.timer%15 == 0)) then
+        if (self.colors[1] == self.color) then 
+            self.color = self.colors[2] 
+            self.signaling = true
+            sfx(3, 1)
+        else self.color = self.colors[1] end
     end
     if (self.timer <= 0 and self.timer >= self.activeTime*-1) then
-        local diffx =  self.x - player.x
-        local diffy = self.y - player.y
+        local diffx =  self.x - p.x
+        local diffy = self.y - p.y
         self.angle = atan2(diffx, diffy*-1)
         self.dx += self.acc*cos(self.angle)*-10
         self.dy += self.acc*sin(self.angle)*10
@@ -590,7 +731,7 @@ function spr_r(s,x,y,a,w,h)
     end
    end
 
-player = Player:new{}
+p = Player:new{}
 enemies = {}
 gates = {}
 particles = {}
@@ -631,11 +772,11 @@ d50000006d00000067000000d5000000000000000000000000000000000000000000000000000000
 44444444444444440000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 44444444444444440000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 __sfx__
-4b040b00396513f6613f6712b6710e60109601006010c601086010660108601036010260100601245012450124501235012350100501005013250132501325013250132501325013250132501325013250132501
-520300000040000400004001e6501765014650134500e4500b4500643004410034000040000400004000040000400004000040000400004000040000400004000040000400004000040000400004000040000400
+4a040500396513f6613f6712b6710e60109601006010c601086010660108601036010260100601245012450124501235012350100501005013250132501325013250132501325013250132501325013250132501
+52040000376503e6503e650356501c65014650134500e4500b4500643004410034000040000400004000040000400004000040000400004000040000400004000040000400004000040000400004000040000400
 cf060b00396533f6633d673396733865334653296531e653136530965302653006030060300603006030060300603006030060300603006030060300603006030060300603006030060300603006030060300603
-001000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-001000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+000c01002b3302a300000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+2a050000186402b640376403c6503e6503f6503f6603f6603f6703f6703f6703f6703f6703c6703a670386703667034670306702d6702c6702966025660206601e6601a65016650106400b630076200161000000
 1d1800000c0700c0700c0700c0700c0700c0700e070110700c0700c0700c0700c0700c0700c0700e070110701407014070140701407014070140700e0700f0701107011070110701107011070110700f0700e070
 0118000000563005030c6430050324600005630c6430050300563005030c6430050324600005630c6430050300563005030c6430050324600005630c6430050300563005030c6430050324600005630c64300503
 931800003f6153f6153f6153f6153f6153f6153f6153f6153f6153f6153f6153f6153f6153f6153f6153f6153f6153f6153f6153f6153f6153f6153f6153f6153f6153f6153f6153f6153f6153f6153f6153f615
