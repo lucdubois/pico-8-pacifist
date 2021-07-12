@@ -12,8 +12,11 @@ lives=3
 gtms=0
 message='the pacifist'
 messageTimer=180
+bombs=1
 bombInUse=false
-bombTimer=40
+bombTimer=60
+bombScale = 1
+bombRechargeT=0
 
 function _init()
     save('@clip')
@@ -44,6 +47,11 @@ function resetGame()
     music(0)
     messageTimer=120
     message='try again'
+    bombs=1
+    bombInUse=false
+    bombTimer=60
+    bombScale = 1
+    bombRechargeT=0
 end
 
 function drawMessage()
@@ -61,7 +69,6 @@ function enemyCanSpawn(en)
     if getDist(en.x, en.y, p.x, p.y) < 42 then return false end
 
     local pa = p.angle-90%360
-    print(''..pa, 20, 20, 1)
     local angle1 = (pa-30)/360
     local angle2 = (pa+30)/360
     local x1 = (sin(angle1)*100)+p.x
@@ -82,13 +89,15 @@ function spawnEnemy(en)
 end
 
 function useBomb()
-    bombInUse = true
-    shake_timer = 60
-    shaking = true
-    music(-1)
-    sfx(4)
-    for en in all(enemies) do
-        en:die()
+    if (bombs > 0) then
+        bombInUse = true
+        message='dimensional shift'
+        messageTimer=60
+        sfx(4, 2)
+        bombs-=1
+        bombRechargeT=5400
+    else
+        sfx(12, 2)
     end
 end
 function spawnTrail(o, r)
@@ -105,188 +114,231 @@ function spawnTrail(o, r)
 end
 
 function _update60() --called at 60fps
-    if (p.dead == true and shake_timer == 0) then
-        if lives>=2 then 
-            newRound()
-        else
-            resetGame()
+
+
+        p.dx*=p.friction
+        p.dy*=p.friction
+        local angle = p.angle%360
+        if (btn(0)) then 
+            p.dx-=p.acc
+            spawnTrail(p, 4)
+            if angle > 180 then p.angle-=10 end
+            if angle < 180 then p.angle+=10 end
+        end -- left
+        if (btn(1)) then 
+            p.dx+=p.acc
+            spawnTrail(p, 4)
+            if angle != 0 then
+                if angle > 180 then p.angle+=10 end
+                if angle <= 180 then p.angle-=10 end
+            end
+        end -- right
+        if (btn(2)) then 
+            p.dy-=p.acc
+            spawnTrail(p, 4)
+            if ((angle <= 90 and angle >= 0) or angle > 270 ) then p.angle-=10 end
+            if ((angle > 90 and angle <= 180) or (angle < 270 and angle >180)) then p.angle+=10 end
+        end -- up
+        if (btn(3)) then 
+            p.dy+=p.acc
+            spawnTrail(p, 4)
+            if ((angle < 90 and angle >= 0) or angle > 270 ) then p.angle+=10 end
+            if (angle > 90 or (angle < 270 and angle >=180)) then p.angle-=10 end
+        end -- down
+
+        -- if angle == 0 then p.angle = 0 end
+        p.dx=mid(-p.max_dx,p.dx,p.max_dx)
+        p.dy=mid(-p.max_dy,p.dy,p.max_dy)
+
+        p.x+=p.dx
+        p.y+=p.dy
+        if (p.x>124) then p.x=124 end
+        if (p.x<4) then p.x=4 end
+        if (p.y>124) then p.y=124 end
+        if (p.y<4) then p.y=4 end
+        
+    if (bombInUse == false) then
+        if (bombRechargeT == 0 and bombs == 0) then bombs+=1 end
+        if (bombRechargeT >0) then bombRechargeT-=1 end
+        if (btn(4)) then
+            useBomb()
         end
-        
-    end
-    gtms+=1
-    local gt = gtms/60
-    if shake_timer == 0 then
-        shaking = false
-        shake_timer = 10
-        offset=0
-    end
-    if shaking == true then 
-        shake_timer-=1 
-        offset=0.1
-    end
-    if bombTimer == 0 then 
-        bombInUse = false
-        bombTimer = 40
-        music(3, 200)
-    end
-    if bombInUse == true then 
-        enemies = {}
-        bombTimer -= 1
-    end
-    if (gt % 3 == 0) then
-        local en = EasyE:new{}
-        spawnEnemy(en)
-    elseif (gt >=40 and gt % 1.5 == 0) then
-        local en = EasyE:new{}
-        spawnEnemy(en)
-    elseif (gt >=60 and gt*10 % 8 == 0) then
-        local en = EasyE:new{}
-        spawnEnemy(en)
-    elseif (gt >=80 and gt*10 % 5 == 0) then
-        local en = EasyE:new{}
-        spawnEnemy(en)
-    end
-    if (gt > 15 and gt % 6 == 0) then
-        local en = MediumE:new{}
-        spawnEnemy(en)
-    elseif (gt > 50 and gt % 2 == 0) then
-        local en = MediumE:new{}
-        spawnEnemy(en)
-    elseif (gt > 100 and gt % 1 == 0) then
-        local en = MediumE:new{}
-        spawnEnemy(en)
-    end
-    if (gt > 30 and gt % 10 == 0) then
-        local en = FastE:new{}
-        spawnEnemy(en)
-    end
-
-    if (gt % 5 == 0) then
-        local gate = MovingGate:new{}
-        gate.angle = rnd(0.5)+0.5;
-        local s = sin(gate.angle);
-        gate.cx = rnd(116);
-        gate.cy = rnd(116);
-        gate.x1 = gate.cx+(10*s);
-        gate.x2 = gate.cx+(-10*s);
-        gate.y1 = gate.cy+(10*(1-s));
-        gate.y2 = gate.cy+(-10*(1-s));
-        gate.dx = rnd(gate.max_dx)
-        gate.dy = rnd(gate.max_dy)
-        gate.dangle = rnd(0.012)-0.006
-        add(gates, gate)
-    end
-
-
-    p.dx*=p.friction
-    p.dy*=p.friction
-    local angle = p.angle%360
-    if (btn(0)) then 
-        p.dx-=p.acc
-        spawnTrail(p, 4)
-        if angle > 180 then p.angle-=10 end
-        if angle < 180 then p.angle+=10 end
-    end -- left
-    if (btn(1)) then 
-        p.dx+=p.acc
-        spawnTrail(p, 4)
-        if angle != 0 then
-            if angle > 180 then p.angle+=10 end
-            if angle <= 180 then p.angle-=10 end
+        if (p.dead == true and shake_timer == 0) then
+            if lives>=2 then 
+                newRound()
+            else
+                resetGame()
+            end
+            
         end
-    end -- right
-    if (btn(2)) then 
-        p.dy-=p.acc
-        spawnTrail(p, 4)
-        if ((angle <= 90 and angle >= 0) or angle > 270 ) then p.angle-=10 end
-        if ((angle > 90 and angle <= 180) or (angle < 270 and angle >180)) then p.angle+=10 end
-    end -- up
-    if (btn(3)) then 
-        p.dy+=p.acc
-        spawnTrail(p, 4)
-        if ((angle < 90 and angle >= 0) or angle > 270 ) then p.angle+=10 end
-        if (angle > 90 or (angle < 270 and angle >=180)) then p.angle-=10 end
-    end -- down
-    if (btn(4)) then
-        useBomb()
-    end
-    -- if angle == 0 then p.angle = 0 end
-    p.dx=mid(-p.max_dx,p.dx,p.max_dx)
-    p.dy=mid(-p.max_dy,p.dy,p.max_dy)
+        gtms+=1
+        local gt = gtms/60
+        if shake_timer == 0 then
+            shaking = false
+            shake_timer = 10
+            offset=0
+        end
+        if shaking == true then 
+            shake_timer-=1 
+            offset=0.1
+        end
+        if bombTimer == 0 then 
+            bombInUse = false
+            bombTimer = 60
+        end
+        if (gt % 3 == 0) then
+            local en = EasyE:new{}
+            spawnEnemy(en)
+        elseif (gt >=40 and gt % 1.5 == 0) then
+            local en = EasyE:new{}
+            spawnEnemy(en)
+        elseif (gt >=60 and gt*10 % 8 == 0) then
+            local en = EasyE:new{}
+            spawnEnemy(en)
+        elseif (gt >=80 and gt*10 % 5 == 0) then
+            local en = EasyE:new{}
+            spawnEnemy(en)
+        end
+        if (gt > 15 and gt % 6 == 0) then
+            local en = MediumE:new{}
+            spawnEnemy(en)
+        elseif (gt > 50 and gt % 2 == 0) then
+            local en = MediumE:new{}
+            spawnEnemy(en)
+        elseif (gt > 100 and gt % 1 == 0) then
+            local en = MediumE:new{}
+            spawnEnemy(en)
+        end
+        if (gt > 30 and gt % 10 == 0) then
+            local en = FastE:new{}
+            spawnEnemy(en)
+        end
 
-    p.x+=p.dx
-    p.y+=p.dy
-    if (p.x>124) then p.x=124 end
-    if (p.x<4) then p.x=4 end
-    if (p.y>124) then p.y=124 end
-    if (p.y<4) then p.y=4 end
-    
-    for gate in all(gates) do
-        gate.cx+=gate.dx
-        gate.cy+=gate.dy
-        gate.angle+=gate.dangle
-        if (gate.angle>=1) then gate.angle-=1 end
-        local gateSin = sin(gate.angle)
-        local gateCos = cos(gate.angle)
-        gate.x1 = gate.cx+(10*gateSin);
-        gate.x2 = gate.cx+(-10*gateSin);
-        gate.y1 = gate.cy+(10*(gateCos));
-        gate.y2 = gate.cy+(-10*(gateCos));
-        
-        if (gate.cx>120 or gate.cx<0) then gate.dx*=-1 end
-        if (gate.cy>120 or gate.cy<0) then gate.dy*=-1 end
-        
-        if (getPointCircleCollision(gate.x1, gate.y1, p.x, p.y, 2) or getPointCircleCollision(gate.x2, gate.y2, p.x, p.y, 2) ) then 
-            p.dx = p.dx*-1
-            p.dy = p.dy*-1
-        elseif (isTouchingPlayer(gate.x1, gate.y1, gate.x2, gate.y2, p.x, p.y)) then
-            local soundPlayed = false
-            local enemiesKilled = 0
-            for enemy in all(enemies) do
-                if (getPointCircleCollision(enemy.x, enemy.y, gate.cx, gate.cy, 40) == true) then
-                    if soundPlayed == false then
-                        sfx(1)
-                        soundPlayed = true
+        if (gt % 5 == 0) then
+            local gate = MovingGate:new{}
+            gate.angle = rnd(0.5)+0.5;
+            local s = sin(gate.angle);
+            gate.cx = rnd(116);
+            gate.cy = rnd(116);
+            gate.x1 = gate.cx+(10*s);
+            gate.x2 = gate.cx+(-10*s);
+            gate.y1 = gate.cy+(10*(1-s));
+            gate.y2 = gate.cy+(-10*(1-s));
+            gate.dx = rnd(gate.max_dx)
+            gate.dy = rnd(gate.max_dy)
+            gate.dangle = rnd(0.012)-0.006
+            add(gates, gate)
+        end
+        for gate in all(gates) do
+            gate.cx+=gate.dx
+            gate.cy+=gate.dy
+            gate.angle+=gate.dangle
+            if (gate.angle>=1) then gate.angle-=1 end
+            local gateSin = sin(gate.angle)
+            local gateCos = cos(gate.angle)
+            gate.x1 = gate.cx+(10*gateSin);
+            gate.x2 = gate.cx+(-10*gateSin);
+            gate.y1 = gate.cy+(10*(gateCos));
+            gate.y2 = gate.cy+(-10*(gateCos));
+            
+            if (gate.cx>120 or gate.cx<0) then gate.dx*=-1 end
+            if (gate.cy>120 or gate.cy<0) then gate.dy*=-1 end
+            
+            if (getPointCircleCollision(gate.x1, gate.y1, p.x, p.y, 2) or getPointCircleCollision(gate.x2, gate.y2, p.x, p.y, 2) ) then 
+                p.dx = p.dx*-1
+                p.dy = p.dy*-1
+            elseif (isTouchingPlayer(gate.x1, gate.y1, gate.x2, gate.y2, p.x, p.y)) then
+                local soundPlayed = false
+                local enemiesKilled = 0
+                for enemy in all(enemies) do
+                    if (getPointCircleCollision(enemy.x, enemy.y, gate.cx, gate.cy, 40) == true) then
+                        if soundPlayed == false then
+                            sfx(1)
+                            soundPlayed = true
+                        end
+                        enemy:die()
+                        score+=enemy.points*multiplier
+                        if score > highscore then highscore = score end
+                        del(enemies, enemy)
+                        enemiesKilled+=1
                     end
-                    enemy:die()
-                    score+=enemy.points*multiplier
-                    if score > highscore then highscore = score end
-                    del(enemies, enemy)
-                    enemiesKilled+=1
+                end
+                shaking = true
+                sfx(0)
+                for i=1,20,1 do
+                    local dx = rnd(10)-5
+                    local dy = rnd(10)-5
+                    local particle = Particle:new{x=gate.cx, y=gate.cy, dx = dx, dy = dy}
+                    add(particles, particle)
+                end
+                del(gates, gate)
+                multiplier+=enemiesKilled
+                bombRechargeT-=120
+            end
+        end
+        for enemy in all(enemies) do
+            enemy:move()
+            if (getPointCircleCollision(enemy.x, enemy.y, p.x, p.y, 2) == true) then
+                shaking = true
+                sfx(2)
+                for i=1,40,1 do
+                    local dx = rnd(4)-2
+                    local dy = rnd(4)-2
+                    local particle = Particle:new{x=p.x, y=p.y, dx = dx, dy = dy, color = 7, max_frames= 60}
+                    add(particles, particle)
+                    p.dead = true
+                end
+                for enemy2 in all(enemies) do 
+                    enemy2:die() 
+                    del(enemies, enemy2)
                 end
             end
-            shaking = true
-            sfx(0)
-            for i=1,20,1 do
-                local dx = rnd(10)-5
-                local dy = rnd(10)-5
-                local particle = Particle:new{x=gate.cx, y=gate.cy, dx = dx, dy = dy}
-                add(particles, particle)
-            end
-            del(gates, gate)
-            multiplier+=enemiesKilled
-        end
-    end
-    for enemy in all(enemies) do
-		enemy:move()
-        if (getPointCircleCollision(enemy.x, enemy.y, p.x, p.y, 2) == true) then
-            shaking = true
-            sfx(2)
-            for i=1,40,1 do
-                local dx = rnd(4)-2
-                local dy = rnd(4)-2
-                local particle = Particle:new{x=p.x, y=p.y, dx = dx, dy = dy, color = 7, max_frames= 60}
-                add(particles, particle)
-                p.dead = true
-            end
-            for enemy2 in all(enemies) do 
-                enemy2:die() 
-                del(enemies, enemy2)
-            end
-        end
 
+        end
+        moveParticles()
+    else 
+        bombScale = (((cos((bombTimer/120))*32)+32)/8)+1
+        bombTimer -= 1
+        for e in all(enemies) do
+            local ratiox = (e.x/128)/(e.y/128)
+            local ratioy = (e.y/128)/(e.x/128)
+            e.x*=bombScale
+            e.y*=bombScale
+            if (e.x > 130 or e.y > 130) then del(enemies, e) end
+        end
+        for p in all(particles) do
+            local ratiox = (p.x/128)/(p.y/128)
+            local ratioy = (p.y/128)/(p.x/128)
+            p.x*=bombScale
+            p.y*=bombScale
+            if (p.x > 130 or p.y > 130) then del(particles, p) end
+        end
+        for g in all(gates) do
+            local ratiox = (g.cx/128)/(g.cy/128)
+            local ratioy = (g.cy/128)/(g.cx/128)
+            g.cx*=bombScale
+            g.cy*=bombScale
+            g.x1*=bombScale
+            g.y1*=bombScale
+            g.x2*=bombScale
+            g.y2*=bombScale
+            if (g.cx > 140 or g.cy > 140) then del(gates, g) end
+        end
+        if (bombTimer == 0) then 
+            bombScale=1
+            
+            local px = p.x
+            local py = p.y
+            local pa = p.angle
+            p = Player:new{
+                x = px,
+                y = py,
+                angle = pa
+            }
+            bombInUse = false 
+        end
+    
     end
-    moveParticles()
 end
 
 function _draw()
@@ -322,101 +374,100 @@ function _draw()
     end
         
     drawMessage()
-    if (bombInUse == true and bombTimer == 0) then
-        pal(0, 0)
-        pal(1, 1)
-        pal(2, 2)
-        pal(3, 3)
-        pal(4, 4)
-        pal(5, 5)
-        pal(6, 6)
-        pal(7, 7)
-        pal(8, 8)
-        pal(9, 9)
-        pal(10, 10)
-        pal(11, 11)
-        pal(12, 12)
-        pal(13, 13)
-        pal(14, 14)
-        pal(15, 15)
-    end
-    if (bombInUse == true and bombTimer > 27 and bombTimer <= 35) then
-        pal(0, 7)
-        pal(1, 7)
-        pal(2, 7)
-        pal(3, 7)
-        pal(4, 7)
-        pal(5, 7)
-        pal(6, 7)
-        pal(7, 7)
-        pal(8, 7)
-        pal(9, 7)
-        pal(10, 7)
-        pal(11, 7)
-        pal(12, 7)
-        pal(13, 7)
-        pal(14, 7)
-        pal(15, 7)
-    end
-    if (bombInUse == true and bombTimer > 20 and bombTimer <= 27) then
-        pal(0, 6)
-        pal(1, 7)
-        pal(2, 7)
-        pal(3, 7)
-        pal(4, 7)
-        pal(5, 7)
-        pal(6, 7)
-        pal(7, 7)
-        pal(8, 7)
-        pal(9, 7)
-        pal(10, 7)
-        pal(11, 7)
-        pal(12, 7)
-        pal(13, 7)
-        pal(14, 7)
-        pal(15, 7)
-    end
-    if (bombInUse == true and bombTimer > 10 and bombTimer <= 20) then
-        pal(0, 5)
-        pal(1, 6)
-        pal(2, 8)
-        pal(3, 1)
-        pal(4, 9)
-        pal(5, 7)
-        pal(6, 7)
-        pal(7, 7)
-        pal(8, 14)
-        pal(9, 15)
-        pal(10, 15)
-        pal(11, 7)
-        pal(12, 7)
-        pal(13, 7)
-        pal(14, 7)
-        pal(15, 7)
-    end
-    if (bombInUse == true and ((bombTimer > 0 and bombTimer <= 10) or bombTimer > 35)) then
-        pal(0, 1)
-        pal(1, 12)
-        pal(2, 8)
-        pal(3, 1)
-        pal(4, 9)
-        pal(5, 6)
-        pal(6, 6)
-        pal(7, 7)
-        pal(8, 14)
-        pal(9, 15)
-        pal(10, 15)
-        pal(11, 7)
-        pal(12, 7)
-        pal(13, 7)
-        pal(14, 7)
-        pal(15, 7)
-    end
+    -- if (bombInUse == true and bombTimer == 0) then
+    --     pal(0, 0)
+    --     pal(1, 1)
+    --     pal(2, 2)
+    --     pal(3, 3)
+    --     pal(4, 4)
+    --     pal(5, 5)
+    --     pal(6, 6)
+    --     pal(7, 7)
+    --     pal(8, 8)
+    --     pal(9, 9)
+    --     pal(10, 10)
+    --     pal(11, 11)
+    --     pal(12, 12)
+    --     pal(13, 13)
+    --     pal(14, 14)
+    --     pal(15, 15)
+    -- end
+    -- if (bombInUse == true and bombTimer > 27 and bombTimer <= 35) then
+    --     pal(0, 7)
+    --     pal(1, 7)
+    --     pal(2, 7)
+    --     pal(3, 7)
+    --     pal(4, 7)
+    --     pal(5, 7)
+    --     pal(6, 7)
+    --     pal(7, 7)
+    --     pal(8, 7)
+    --     pal(9, 7)
+    --     pal(10, 7)
+    --     pal(11, 7)
+    --     pal(12, 7)
+    --     pal(13, 7)
+    --     pal(14, 7)
+    --     pal(15, 7)
+    -- end
+    -- if (bombInUse == true and bombTimer > 20 and bombTimer <= 27) then
+    --     pal(0, 6)
+    --     pal(1, 7)
+    --     pal(2, 7)
+    --     pal(3, 7)
+    --     pal(4, 7)
+    --     pal(5, 7)
+    --     pal(6, 7)
+    --     pal(7, 7)
+    --     pal(8, 7)
+    --     pal(9, 7)
+    --     pal(10, 7)
+    --     pal(11, 7)
+    --     pal(12, 7)
+    --     pal(13, 7)
+    --     pal(14, 7)
+    --     pal(15, 7)
+    -- end
+    -- if (bombInUse == true and bombTimer > 10 and bombTimer <= 20) then
+    --     pal(0, 5)
+    --     pal(1, 6)
+    --     pal(2, 8)
+    --     pal(3, 1)
+    --     pal(4, 9)
+    --     pal(5, 7)
+    --     pal(6, 7)
+    --     pal(7, 7)
+    --     pal(8, 14)
+    --     pal(9, 15)
+    --     pal(10, 15)
+    --     pal(11, 7)
+    --     pal(12, 7)
+    --     pal(13, 7)
+    --     pal(14, 7)
+    --     pal(15, 7)
+    -- end
+    -- if (bombInUse == true and ((bombTimer > 0 and bombTimer <= 10) or bombTimer > 35)) then
+    --     pal(0, 1)
+    --     pal(1, 12)
+    --     pal(2, 8)
+    --     pal(3, 1)
+    --     pal(4, 9)
+    --     pal(5, 6)
+    --     pal(6, 6)
+    --     pal(7, 7)
+    --     pal(8, 14)
+    --     pal(9, 15)
+    --     pal(10, 15)
+    --     pal(11, 7)
+    --     pal(12, 7)
+    --     pal(13, 7)
+    --     pal(14, 7)
+    --     pal(15, 7)
+    -- end
 end
 
 function drawTriangle()
     local pa = p.angle-90%360
-    print(''..pa, 20, 20, 1)
     local angle1 = (pa-30)/360
     local angle2 = (pa+30)/360
     local x1 = (sin(angle1)*100)+p.x
@@ -434,18 +485,34 @@ end
 
 function drawMatrix()
     rectfill(-20, -20, 148, 148, 0)
+    local newMod = 0
     local xmod = (p.x-60)/6
     local ymod = (p.y-60)/6
+    if (bombInUse == true) then
+        --if (bombTimer < 40) then
+        newMod = ((cos((bombTimer/120))*32)+32)/64
+        --end
+        for x=0-xmod,128-xmod,16 do
+            line(x*newMod, 0*newMod, x*newMod, 160*newMod, 1)
+        end
+        for y=0-ymod,128-ymod,16 do
+            line(0*newMod, y*newMod, 160*newMod, y*newMod, 1)
+        end
+        xmod = 0
+        ymod=0
+    end
     for x=-64-xmod,192-xmod,16 do
-        line(x, -64, x, 192, 1)
+        line(x*bombScale, -64, x*bombScale, 192, 1)
     end
     for y=-64-ymod,192-ymod,16 do
-        line(-64, y, 192, y, 1)
+        line(-64, y*bombScale, 192, y*bombScale, 1)
     end
+    local bombMeterW = ((5400-bombRechargeT)/5400)*127
     line(0, 0, 0, 127, 1)
     line(0, 0, 127, 0, 1)
     line(127, 127, 127, 0, 1)
     line(127, 127, 0, 127, 1)
+    line(0, 127, bombMeterW , 127, 12)
 end
 
 function screen_shake()
@@ -774,9 +841,9 @@ d50000006d00000067000000d5000000000000000000000000000000000000000000000000000000
 __sfx__
 4a040500396513f6613f6712b6710e60109601006010c601086010660108601036010260100601245012450124501235012350100501005013250132501325013250132501325013250132501325013250132501
 52040000376503e6503e650356501c65014650134500e4500b4500643004410034000040000400004000040000400004000040000400004000040000400004000040000400004000040000400004000040000400
-cf060b00396533f6633d673396733865334653296531e653136530965302653006030060300603006030060300603006030060300603006030060300603006030060300603006030060300603006030060300603
+ce060b00396533f6633d673396733865334653296531e653136530965302653006030060300603006030060300603006030060300603006030060300603006030060300603006030060300603006030060300603
 000c01002b3302a300000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-2a050000186402b640376403c6503e6503f6503f6603f6603f6703f6703f6703f6703f6703c6703a670386703667034670306702d6702c6702966025660206601e6601a65016650106400b630076200161000000
+340400003f7333e7233e7233d7233c7233b7233772333723337232c7232972326723237231e7231972315733107330d7330a74308743077430574303743037430374302743017430074300743007430270300703
 1d1800000c0700c0700c0700c0700c0700c0700e070110700c0700c0700c0700c0700c0700c0700e070110701407014070140701407014070140700e0700f0701107011070110701107011070110700f0700e070
 0118000000563005030c6430050324600005630c6430050300563005030c6430050324600005630c6430050300563005030c6430050324600005630c6430050300563005030c6430050324600005630c64300503
 931800003f6153f6153f6153f6153f6153f6153f6153f6153f6153f6153f6153f6153f6153f6153f6153f6153f6153f6153f6153f6153f6153f6153f6153f6153f6153f6153f6153f6153f6153f6153f6153f615
@@ -784,6 +851,7 @@ d10c00201f1251e1001f1251f1251f1251f1001f1251f1001f1251e1001f1251f1251f1251f1001f
 931800003f6053f6053f6153f6053f6053f6053f6153f6053f6053f6053f6153f6053f6053f6053f6153f6053f6053f6053f6153f6053f6053f6053f6153f6053f6053f6053f6153f6053f6053f6053f6153f605
 d10c00001d1251e1051d1251d1251d1251f1051d1251f1051d1251e1051d1251d1251d1251f1051d1251f1051d1251e1051d1251d1251d1251f1051d1251f1051d1251e1051d1251d1251d1251f1051d1251f105
 2d1800001832018320183201832018320183201a3201d3201832018320183201832018320183201a3201d3202032020320203202032020320203201a3201b3201d3201d3201d3201d3201d3201d3201b3201a320
+a410000008565005052e5050050500505005050050500505005050050500505005050050500505005050050500505005050050500505005050050500505005050050500505005050050500505005050050500505
 __music__
 00 45464708
 00 45460908
