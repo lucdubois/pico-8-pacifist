@@ -2,6 +2,8 @@ pico-8 cartridge // http://www.pico-8.com
 version 32
 __lua__
 
+xmod=0
+ymod=0
 offset = 0
 shaking = false
 shake_timer=10
@@ -17,6 +19,11 @@ bombInUse=false
 bombTimer=60
 bombScale = 1
 bombRechargeT=0
+justDied=0
+powerUps={
+    moreGates=0,
+    bigGates=0
+}
 
 function _init()
     save('@clip')
@@ -52,6 +59,11 @@ function resetGame()
     bombTimer=60
     bombScale = 1
     bombRechargeT=0
+    powerUps={
+        moreGates=0,
+        bigGates=0
+    }
+    fieldpus = {}
 end
 
 function drawMessage()
@@ -89,7 +101,7 @@ function spawnEnemy(en)
 end
 
 function useBomb()
-    if (bombs > 0) then
+    if (bombs > 0 and justDied == 0) then
         bombInUse = true
         message='dimensional shift'
         messageTimer=60
@@ -114,7 +126,12 @@ function spawnTrail(o, r)
 end
 
 function _update60() --called at 60fps
+        if justDied > 0 then
+            justDied -= 1
+        end
 
+        xmod = (p.x-60)/6
+        ymod = (p.y-60)/6
 
         p.dx*=p.friction
         p.dy*=p.friction
@@ -163,7 +180,14 @@ function _update60() --called at 60fps
         if (btn(4)) then
             useBomb()
         end
-        if (p.dead == true and shake_timer == 0) then
+        if (p.dead == true and shake_timer == 0 and bombInUse == false) then
+            for i=1,40,1 do
+                local dx = rnd(2)-1+p.dx
+                local dy = rnd(2)-1+p.dy
+                local particle = Particle:new{x=p.x, y=p.y, dx = dx, dy = dy, color = 7, max_frames= 60}
+                add(particles, particle)
+            end
+            justDied = 20
             if lives>=2 then 
                 newRound()
             else
@@ -209,37 +233,57 @@ function _update60() --called at 60fps
             local en = MediumE:new{}
             spawnEnemy(en)
         end
-        if (gt > 30 and gt % 10 == 0) then
+        if (gt > 120 and gt % 8 == 0) then
+            local en = FastE:new{}
+            spawnEnemy(en)
+        elseif (gt > 30 and gt % 16 == 0) then
             local en = FastE:new{}
             spawnEnemy(en)
         end
 
-        if (gt % 5 == 0) then
+        if gt % 2 == 0 then
+            local pu = BigGatesPU:new{}
+            pu:spawn()
+            add(fieldpus, pu)
+        end
+
+        if (gt % (5-powerUps.moreGates) == 0) then
             local gate = MovingGate:new{}
+            local bigGatesPU = powerUps.bigGates*2
+            printh(bigGatesPU, 'debug.txt')
             gate.angle = rnd(0.5)+0.5;
             local s = sin(gate.angle);
             gate.cx = rnd(116);
             gate.cy = rnd(116);
-            gate.x1 = gate.cx+(10*s);
-            gate.x2 = gate.cx+(-10*s);
-            gate.y1 = gate.cy+(10*(1-s));
-            gate.y2 = gate.cy+(-10*(1-s));
+            gate.x1 = gate.cx+((10+bigGatesPU)*s);
+            gate.x2 = gate.cx+((-10-bigGatesPU)*s);
+            gate.y1 = gate.cy+((10+bigGatesPU)*(1-s));
+            gate.y2 = gate.cy+((-10-bigGatesPU)*(1-s));
             gate.dx = rnd(gate.max_dx)
             gate.dy = rnd(gate.max_dy)
             gate.dangle = rnd(0.012)-0.006
             add(gates, gate)
         end
+
+        for pu in all(fieldpus) do
+            if (pu.x-xmod < p.x and 15+pu.x-xmod > p.x and pu.y-ymod < p.y and 15+pu.y-ymod > p.y) then
+                pu.catch()
+                del(fieldpus, pu)
+            end
+        end
+
         for gate in all(gates) do
+            local bigGatesPU = powerUps.bigGates*3
             gate.cx+=gate.dx
             gate.cy+=gate.dy
             gate.angle+=gate.dangle
             if (gate.angle>=1) then gate.angle-=1 end
             local gateSin = sin(gate.angle)
             local gateCos = cos(gate.angle)
-            gate.x1 = gate.cx+(10*gateSin);
-            gate.x2 = gate.cx+(-10*gateSin);
-            gate.y1 = gate.cy+(10*(gateCos));
-            gate.y2 = gate.cy+(-10*(gateCos));
+            gate.x1 = gate.cx+((10+bigGatesPU)*gateSin);
+            gate.x2 = gate.cx+((-10-bigGatesPU)*gateSin);
+            gate.y1 = gate.cy+((10+bigGatesPU)*gateCos);
+            gate.y2 = gate.cy+((-10-bigGatesPU)*gateCos);
             
             if (gate.cx>120 or gate.cx<0) then gate.dx*=-1 end
             if (gate.cy>120 or gate.cy<0) then gate.dy*=-1 end
@@ -251,7 +295,7 @@ function _update60() --called at 60fps
                 local soundPlayed = false
                 local enemiesKilled = 0
                 for enemy in all(enemies) do
-                    if (getPointCircleCollision(enemy.x, enemy.y, gate.cx, gate.cy, 40) == true) then
+                    if (getPointCircleCollision(enemy.x, enemy.y, gate.cx, gate.cy, 40+(bigGatesPU)) == true) then
                         if soundPlayed == false then
                             sfx(1)
                             soundPlayed = true
@@ -278,16 +322,10 @@ function _update60() --called at 60fps
         end
         for enemy in all(enemies) do
             enemy:move()
-            if (getPointCircleCollision(enemy.x, enemy.y, p.x, p.y, 2) == true) then
+            if (getPointCircleCollision(enemy.x, enemy.y, p.x, p.y, 2) == true and bombInUse == false) then
                 shaking = true
                 sfx(2)
-                for i=1,40,1 do
-                    local dx = rnd(4)-2
-                    local dy = rnd(4)-2
-                    local particle = Particle:new{x=p.x, y=p.y, dx = dx, dy = dy, color = 7, max_frames= 60}
-                    add(particles, particle)
-                    p.dead = true
-                end
+                p.dead = true
                 for enemy2 in all(enemies) do 
                     enemy2:die() 
                     del(enemies, enemy2)
@@ -353,117 +391,28 @@ function _draw()
     40,0, 6)
     print(''..multiplier..'x',
         110,0, 6)
+
+    for fieldpu in all(fieldpus) do
+        fieldpu:draw()
+    end
+    for gate in all(gates) do
+        circ(gate.cx, gate.cy, 40+(powerUps.bigGates*3), 1)
+    end
     for gate in all(gates) do
         circfill(gate.x1,gate.y1,1,10)
         circfill(gate.x2,gate.y2,1,10)
-        circ(gate.cx, gate.cy, 40, 1)
         line(gate.x1, gate.y1, gate.x2, gate.y2, 11)
     end
-    -- drawTriangle()
-    spr_r(lives-1, p.x-4, p.y-4, p.angle, 1, 1) -- draw the sprite using the values of our p object 
+    spr_r(lives-1, p.x-4, p.y-4, p.angle, 1, 1)
     for enemy in all(enemies) do
 		enemy:draw()
-        -- print(''..dx,
-        -- 0,0, 6)
-        -- print(''..dy,
-        -- 60,0, 6)
     end
     for particle in all(particles) do
         rectfill(particle.x, particle.y, particle.x, particle.y, particle.color)
         particle.frames+=1
     end
-        
+    drawBombBar()
     drawMessage()
-    -- if (bombInUse == true and bombTimer == 0) then
-    --     pal(0, 0)
-    --     pal(1, 1)
-    --     pal(2, 2)
-    --     pal(3, 3)
-    --     pal(4, 4)
-    --     pal(5, 5)
-    --     pal(6, 6)
-    --     pal(7, 7)
-    --     pal(8, 8)
-    --     pal(9, 9)
-    --     pal(10, 10)
-    --     pal(11, 11)
-    --     pal(12, 12)
-    --     pal(13, 13)
-    --     pal(14, 14)
-    --     pal(15, 15)
-    -- end
-    -- if (bombInUse == true and bombTimer > 27 and bombTimer <= 35) then
-    --     pal(0, 7)
-    --     pal(1, 7)
-    --     pal(2, 7)
-    --     pal(3, 7)
-    --     pal(4, 7)
-    --     pal(5, 7)
-    --     pal(6, 7)
-    --     pal(7, 7)
-    --     pal(8, 7)
-    --     pal(9, 7)
-    --     pal(10, 7)
-    --     pal(11, 7)
-    --     pal(12, 7)
-    --     pal(13, 7)
-    --     pal(14, 7)
-    --     pal(15, 7)
-    -- end
-    -- if (bombInUse == true and bombTimer > 20 and bombTimer <= 27) then
-    --     pal(0, 6)
-    --     pal(1, 7)
-    --     pal(2, 7)
-    --     pal(3, 7)
-    --     pal(4, 7)
-    --     pal(5, 7)
-    --     pal(6, 7)
-    --     pal(7, 7)
-    --     pal(8, 7)
-    --     pal(9, 7)
-    --     pal(10, 7)
-    --     pal(11, 7)
-    --     pal(12, 7)
-    --     pal(13, 7)
-    --     pal(14, 7)
-    --     pal(15, 7)
-    -- end
-    -- if (bombInUse == true and bombTimer > 10 and bombTimer <= 20) then
-    --     pal(0, 5)
-    --     pal(1, 6)
-    --     pal(2, 8)
-    --     pal(3, 1)
-    --     pal(4, 9)
-    --     pal(5, 7)
-    --     pal(6, 7)
-    --     pal(7, 7)
-    --     pal(8, 14)
-    --     pal(9, 15)
-    --     pal(10, 15)
-    --     pal(11, 7)
-    --     pal(12, 7)
-    --     pal(13, 7)
-    --     pal(14, 7)
-    --     pal(15, 7)
-    -- end
-    -- if (bombInUse == true and ((bombTimer > 0 and bombTimer <= 10) or bombTimer > 35)) then
-    --     pal(0, 1)
-    --     pal(1, 12)
-    --     pal(2, 8)
-    --     pal(3, 1)
-    --     pal(4, 9)
-    --     pal(5, 6)
-    --     pal(6, 6)
-    --     pal(7, 7)
-    --     pal(8, 14)
-    --     pal(9, 15)
-    --     pal(10, 15)
-    --     pal(11, 7)
-    --     pal(12, 7)
-    --     pal(13, 7)
-    --     pal(14, 7)
-    --     pal(15, 7)
-    -- end
 end
 
 function drawTriangle()
@@ -486,8 +435,6 @@ end
 function drawMatrix()
     rectfill(-20, -20, 148, 148, 0)
     local newMod = 0
-    local xmod = (p.x-60)/6
-    local ymod = (p.y-60)/6
     if (bombInUse == true) then
         --if (bombTimer < 40) then
         newMod = ((cos((bombTimer/120))*32)+32)/64
@@ -507,12 +454,10 @@ function drawMatrix()
     for y=-64-ymod,192-ymod,16 do
         line(-64, y*bombScale, 192, y*bombScale, 1)
     end
-    local bombMeterW = ((5400-bombRechargeT)/5400)*127
     line(0, 0, 0, 127, 1)
     line(0, 0, 127, 0, 1)
     line(127, 127, 127, 0, 1)
     line(127, 127, 0, 127, 1)
-    line(0, 127, bombMeterW , 127, 12)
 end
 
 function screen_shake()
@@ -527,6 +472,12 @@ function screen_shake()
     if offset<0.05 then
       offset=0
     end
+end
+
+
+function drawBombBar()
+    local bombMeterW = ((5400-bombRechargeT)/5400)*127
+    line(0, 127, bombMeterW , 127, 12)
 end
 
 function tan(a) return sin(a)/cos(a) end
@@ -563,6 +514,18 @@ Particle = {x=0,
     frames = 0
 }
 
+PowerUp = {x=0,
+y=0,
+time=600
+}
+
+function PowerUp:new (o)
+    o = o or {}
+    setmetatable(o, self)
+    self.__index = self
+    return o
+end
+
 function Particle:new (o)
     o = o or {}
     setmetatable(o, self)
@@ -583,6 +546,14 @@ function Shape:new (o)
     self.__index = self
     return o
 end
+
+MoreGatesPU = PowerUp:new{
+    sprite=16
+}
+
+BigGatesPU = PowerUp:new{
+    sprite=17
+}
 
 Player = Shape:new{
     sprite = 0,
@@ -633,12 +604,30 @@ FastE = Shape:new{
     crd=0.5
 }
 
+function PowerUp:spawn()
+    self.x = flr(rnd(8))*16
+    self.y = flr(rnd(8))*16
+end
+
+function PowerUp:draw()
+    rectfill(self.x-xmod, self.y-ymod, 15+self.x-xmod, 15+self.y-ymod, 1)
+    spr(self.sprite, 4+self.x-xmod, 4+self.y-ymod)
+end
+
+function MoreGatesPU:catch()
+    powerUps.moreGates+=1
+end
+
+function BigGatesPU:catch()
+    powerUps.bigGates+=1
+end
+
 function Shape:draw() 
     circfill(self.x,self.y,2,self.color)
 end
 function FastE:draw() 
     if (self.signaling == true) then
-        circ(self.x, self.y, self.cr, 1)
+        circ(self.x, self.y, self.cr, 7)
     end
     circfill(self.x,self.y,2,self.color)
 end
@@ -710,8 +699,8 @@ end
 function Shape:die()
     local this = self
     for i=1,20,1 do
-        local dx = rnd(6)-3
-        local dy = rnd(6)-3
+        local dx = rnd(6)-3+this.dx
+        local dy = rnd(6)-3+this.dy
         local particle = Particle:new{x=this.x, y=this.y, dx = dx, dy = dy, color = this.color, max_frames= 20}
         add(particles, particle)
     end
@@ -802,6 +791,7 @@ p = Player:new{}
 enemies = {}
 gates = {}
 particles = {}
+fieldpus = {}
 
 
 
@@ -814,14 +804,14 @@ d5d5d5d56d6d6d6d67676767d5d5d5d5000000000000000000000000000000000000000000000000
 d5d5d5006d6d6d0067676700d5d5d500000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 5d5d0000d6d60000767600005d5d0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 d50000006d00000067000000d5000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+44000000440000500000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+43000050433005050000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+00300555033300000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+00030050003330000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+00003000000333000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+00000300000033300000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+00000034000003340000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+00000044000000440000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
