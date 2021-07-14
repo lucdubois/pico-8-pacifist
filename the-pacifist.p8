@@ -24,6 +24,7 @@ powerUps={
     moreGates=0,
     bigGates=0
 }
+difficulty=0 --0 to 1
 
 function _init()
     save('@clip')
@@ -126,294 +127,306 @@ function spawnTrail(o, r)
         add(particles, particle)
 end
 
-function _update60() --called at 60fps
-        if justDied > 0 then
-            justDied -= 1
-        end
-
-        xmod = (p.x-60)/6
-        ymod = (p.y-60)/6
-
-        p.dx*=p.friction
-        p.dy*=p.friction
-        local angle = p.angle%360
-        if (btn(0)) then 
-            p.dx-=p.acc
-            spawnTrail(p, 4)
-            if angle > 180 then p.angle-=10 end
-            if angle < 180 then p.angle+=10 end
-        end -- left
-        if (btn(1)) then 
-            p.dx+=p.acc
-            spawnTrail(p, 4)
-            if angle != 0 then
-                if angle > 180 then p.angle+=10 end
-                if angle <= 180 then p.angle-=10 end
-            end
-        end -- right
-        if (btn(2)) then 
-            p.dy-=p.acc
-            spawnTrail(p, 4)
-            if ((angle <= 90 and angle >= 0) or angle > 270 ) then p.angle-=10 end
-            if ((angle > 90 and angle <= 180) or (angle < 270 and angle >180)) then p.angle+=10 end
-        end -- up
-        if (btn(3)) then 
-            p.dy+=p.acc
-            spawnTrail(p, 4)
-            if ((angle < 90 and angle >= 0) or angle > 270 ) then p.angle+=10 end
-            if (angle > 90 or (angle < 270 and angle >=180)) then p.angle-=10 end
-        end -- down
-
-        -- if angle == 0 then p.angle = 0 end
-        p.dx=mid(-p.max_dx,p.dx,p.max_dx)
-        p.dy=mid(-p.max_dy,p.dy,p.max_dy)
-
-        p.x+=p.dx
-        p.y+=p.dy
-        if (p.x>124) then p.x=124 end
-        if (p.x<4) then p.x=4 end
-        if (p.y>124) then p.y=124 end
-        if (p.y<4) then p.y=4 end
-        
-    if (bombInUse == false) then
-        if (bombRechargeT == 0 and bombs == 0) then bombs+=1 end
-        if (bombRechargeT >0) then bombRechargeT-=1 end
-        if (btn(4)) then
+function _update60()
+        updateAfterDeathTimer()
+        updatePStuff()
+        updateBgModifiers()
+    if (bombInUse) then
+        manageActiveBomb()
+    else 
+        updateBombRechargeTime()
+        if (btn(4)) then -- z button (bomb)
             useBomb()
         end
-        if (p.dead == true and shake_timer == 0 and bombInUse == false) then
-            for i=1,40,1 do
-                local dx = rnd(2)-1+p.dx
-                local dy = rnd(2)-1+p.dy
-                local particle = Particle:new{x=p.x, y=p.y, dx = dx, dy = dy, color = 7, max_frames= 60}
-                add(particles, particle)
-            end
-            justDied = 20
-            if lives>=2 then 
-                newRound()
-            else
-                resetGame()
-            end
-            
-        end
-        gtms+=1
-        local gt = gtms/60
-        if shake_timer == 0 then
-            shaking = false
-            shake_timer = 10
-            offset=0
-        end
-        if shaking == true then 
-            shake_timer-=1 
-            offset=0.1
-        end
-        if bombTimer == 0 then 
-            bombInUse = false
-            bombTimer = 60
-        end
-        if (gt % 3 == 0) then
-            local en = EasyE:new{}
-            spawnEnemy(en)
-        elseif (gt >=40 and gt % 1.5 == 0) then
-            local en = EasyE:new{}
-            spawnEnemy(en)
-        elseif (gt >=60 and gt*10 % 8 == 0) then
-            local en = EasyE:new{}
-            spawnEnemy(en)
-        elseif (gt >=80 and gt*10 % 5 == 0) then
-            local en = EasyE:new{}
-            spawnEnemy(en)
-        end
-        if (gt > 15 and gt % 6 == 0) then
-            local en = MediumE:new{}
-            spawnEnemy(en)
-        elseif (gt > 50 and gt % 2 == 0) then
-            local en = MediumE:new{}
-            spawnEnemy(en)
-        elseif (gt > 100 and gt % 1 == 0) then
-            local en = MediumE:new{}
-            spawnEnemy(en)
-        end
-        if (gt > 120 and gt % 8 == 0) then
-            local en = FastE:new{}
-            spawnEnemy(en)
-        elseif (gt > 30 and gt % 16 == 0) then
-            local en = FastE:new{}
-            spawnEnemy(en)
+        if (p.dead == true and bombInUse == false) then
+            playerDied()
         end
 
-        -- if gt % 2 == 0 then
-        --     local pu = BigGatesPU:new{}
-        --     pu:spawn()
-        --     add(fieldpus, pu)
-        -- end
+        updateShakeTimer()
+        updateBombTimer()
+        
+        spawnStuff()
 
-        if (gt % (5-powerUps.moreGates) == 0) then
-            local gate = MovingGate:new{}
-            local bigGatesPU = powerUps.bigGates*2
-            printh(bigGatesPU, 'debug.txt')
-            gate.angle = rnd(0.5)+0.5;
-            local s = sin(gate.angle);
-            gate.cx = rnd(116);
-            gate.cy = rnd(116);
-            gate.x1 = gate.cx+((10+bigGatesPU)*s);
-            gate.x2 = gate.cx+((-10-bigGatesPU)*s);
-            gate.y1 = gate.cy+((10+bigGatesPU)*(1-s));
-            gate.y2 = gate.cy+((-10-bigGatesPU)*(1-s));
-            gate.dx = rnd(gate.max_dx)
-            gate.dy = rnd(gate.max_dy)
-            gate.dangle = rnd(0.012)-0.006
-            add(gates, gate)
-        end
-
-        for pu in all(fieldpus) do
-            if (pu.x-xmod < p.x and 15+pu.x-xmod > p.x and pu.y-ymod < p.y and 15+pu.y-ymod > p.y) then
-                pu.catch()
-                del(fieldpus, pu)
-            end
-        end
-
-        for gate in all(gates) do
-            local bigGatesPU = powerUps.bigGates*3
-            gate.cx+=gate.dx
-            gate.cy+=gate.dy
-            gate.angle+=gate.dangle
-            if (gate.angle>=1) then gate.angle-=1 end
-            local gateSin = sin(gate.angle)
-            local gateCos = cos(gate.angle)
-            gate.x1 = gate.cx+((10+bigGatesPU)*gateSin);
-            gate.x2 = gate.cx+((-10-bigGatesPU)*gateSin);
-            gate.y1 = gate.cy+((10+bigGatesPU)*gateCos);
-            gate.y2 = gate.cy+((-10-bigGatesPU)*gateCos);
-            
-            if (gate.cx>120 or gate.cx<0) then gate.dx*=-1 end
-            if (gate.cy>120 or gate.cy<0) then gate.dy*=-1 end
-            
-            if (getPointCircleCollision(gate.x1, gate.y1, p.x, p.y, 2) or getPointCircleCollision(gate.x2, gate.y2, p.x, p.y, 2) ) then 
-                p.dx = p.dx*-1
-                p.dy = p.dy*-1
-            elseif (isTouchingPlayer(gate.x1, gate.y1, gate.x2, gate.y2, p.x, p.y)) then
-                local soundPlayed = false
-                local enemiesKilled = 0
-                for enemy in all(enemies) do
-                    if (getPointCircleCollision(enemy.x, enemy.y, gate.cx, gate.cy, 40+(bigGatesPU)) == true) then
-                        if soundPlayed == false then
-                            sfx(1)
-                            soundPlayed = true
-                        end
-                        enemy:die()
-                        score+=enemy.points*multiplier
-                        if score > highscore then highscore = score end
-                        del(enemies, enemy)
-                        enemiesKilled+=1
-                    end
-                end
-                shaking = true
-                sfx(0)
-                for i=1,20,1 do
-                    local dx = rnd(10)-5
-                    local dy = rnd(10)-5
-                    local particle = Particle:new{x=gate.cx, y=gate.cy, dx = dx, dy = dy}
-                    add(particles, particle)
-                end
-                del(gates, gate)
-                multiplier+=enemiesKilled
-                bombRechargeT-=120
-            end
-        end
-        for enemy in all(enemies) do
-            enemy:move()
-            if (getPointCircleCollision(enemy.x, enemy.y, p.x, p.y, 2) == true and bombInUse == false) then
-                shaking = true
-                sfx(2)
-                p.dead = true
-                for enemy2 in all(enemies) do 
-                    enemy2:die() 
-                    del(enemies, enemy2)
-                end
-            end
-
-        end
+        foreach(fieldpus, managePUCollision)
+        foreach(gates, manageGate)
+        foreach(enemies, manageEnemy)
+        
         moveParticles()
-    else 
-        bombScale = (((cos((bombTimer/120))*32)+32)/8)+1
-        bombTimer -= 1
-        for e in all(enemies) do
-            local ratiox = (e.x/128)/(e.y/128)
-            local ratioy = (e.y/128)/(e.x/128)
-            e.x*=bombScale
-            e.y*=bombScale
-            if (e.x > 130 or e.y > 130) then del(enemies, e) end
-        end
-        for p in all(particles) do
-            local ratiox = (p.x/128)/(p.y/128)
-            local ratioy = (p.y/128)/(p.x/128)
-            p.x*=bombScale
-            p.y*=bombScale
-            if (p.x > 130 or p.y > 130) then del(particles, p) end
-        end
-        for g in all(gates) do
-            local ratiox = (g.cx/128)/(g.cy/128)
-            local ratioy = (g.cy/128)/(g.cx/128)
-            g.cx*=bombScale
-            g.cy*=bombScale
-            g.x1*=bombScale
-            g.y1*=bombScale
-            g.x2*=bombScale
-            g.y2*=bombScale
-            if (g.cx > 140 or g.cy > 140) then del(gates, g) end
-        end
-        if (bombTimer == 0) then 
-            bombScale=1
-            
-            local px = p.x
-            local py = p.y
-            local pa = p.angle
-            p = Player:new{
-                x = px,
-                y = py,
-                angle = pa
-            }
-            bombInUse = false 
-        end
-    
     end
 end
 
 function _draw()
-    palt(0, false)
     screen_shake()
-    cls() -- clear screen
+    cls()
     palt(0, true)
     drawMatrix()
-    print(''..score,
-      0,0, 6)
-    print('H.SCORE: '..highscore,
-    40,0, 6)
-    print(''..multiplier..'x',
-        110,0, 6)
-
-    for fieldpu in all(fieldpus) do
-        fieldpu:draw()
-    end
-    for gate in all(gates) do
-        circ(gate.cx, gate.cy, 40+(powerUps.bigGates*3), 1)
-    end
-    for gate in all(gates) do
-        circfill(gate.x1,gate.y1,1,10)
-        circfill(gate.x2,gate.y2,1,10)
-        line(gate.x1, gate.y1, gate.x2, gate.y2, 11)
-    end
-    spr_r(lives-1, p.x-4, p.y-4, p.angle, 1, 1)
-    for enemy in all(enemies) do
-		enemy:draw()
-    end
-    for particle in all(particles) do
-        rectfill(particle.x, particle.y, particle.x, particle.y, particle.color)
-        particle.frames+=1
-    end
+    drawHUD()
+    foreach(fieldpus, drawFieldPU)
+    foreach(gates, drawGateCircle)
+    foreach(gates, drawGate)
+    foreach(enemies, drawEnemy)
+    foreach(particles, drawParticle)
+    spr_r(lives-1, p.x-4, p.y-4, p.angle, 1, 1) --draw player
     drawBombBar()
     drawMessage()
+end
+
+function spawnStuff()
+    gtms+=1
+    local gt = gtms/60
+
+    if (gt % 3 == 0) then
+        local en = EasyE:new{}
+        spawnEnemy(en)
+    elseif (gt >=40 and gt % 1.5 == 0) then
+        local en = EasyE:new{}
+        spawnEnemy(en)
+    elseif (gt >=60 and gt*10 % 8 == 0) then
+        local en = EasyE:new{}
+        spawnEnemy(en)
+    elseif (gt >=80 and gt*10 % 5 == 0) then
+        local en = EasyE:new{}
+        spawnEnemy(en)
+    end
+    if (gt > 15 and gt % 6 == 0) then
+        local en = MediumE:new{}
+        spawnEnemy(en)
+    elseif (gt > 50 and gt % 2 == 0) then
+        local en = MediumE:new{}
+        spawnEnemy(en)
+    elseif (gt > 100 and gt % 1 == 0) then
+        local en = MediumE:new{}
+        spawnEnemy(en)
+    end
+    if (gt > 120 and gt % 8 == 0) then
+        local en = FastE:new{}
+        spawnEnemy(en)
+    elseif (gt > 30 and gt % 16 == 0) then
+        local en = FastE:new{}
+        spawnEnemy(en)
+    end
+
+    -- if gt % 2 == 0 then
+    --     local pu = BigGatesPU:new{}
+    --     pu:spawn()
+    --     add(fieldpus, pu)
+    -- end
+
+    if (gt % (5-powerUps.moreGates) == 0) then
+        newGate()
+    end
+end
+
+function newGate()
+    local gate = MovingGate:new{}
+    local bigGatesPU = powerUps.bigGates*2
+    printh(bigGatesPU, 'debug.txt')
+    gate.angle = rnd(0.5)+0.5;
+    local s = sin(gate.angle);
+    gate.cx = rnd(116);
+    gate.cy = rnd(116);
+    gate.dx = rnd(gate.max_dx)
+    gate.dy = rnd(gate.max_dy)
+    gate.dangle = rnd(0.012)-0.006
+    add(gates, gate)
+end
+
+function updatePStuff()
+    p.dx*=p.friction
+    p.dy*=p.friction
+    local angle = p.angle%360
+    if (btn(0)) then 
+        p.dx-=p.acc
+        spawnTrail(p, 4)
+        if angle > 180 then p.angle-=10 end
+        if angle < 180 then p.angle+=10 end
+    end -- left
+    if (btn(1)) then 
+        p.dx+=p.acc
+        spawnTrail(p, 4)
+        if angle != 0 then
+            if angle > 180 then p.angle+=10 end
+            if angle <= 180 then p.angle-=10 end
+        end
+    end -- right
+    if (btn(2)) then 
+        p.dy-=p.acc
+        spawnTrail(p, 4)
+        if ((angle <= 90 and angle >= 0) or angle > 270 ) then p.angle-=10 end
+        if ((angle > 90 and angle <= 180) or (angle < 270 and angle >180)) then p.angle+=10 end
+    end -- up
+    if (btn(3)) then 
+        p.dy+=p.acc
+        spawnTrail(p, 4)
+        if ((angle < 90 and angle >= 0) or angle > 270 ) then p.angle+=10 end
+        if (angle > 90 or (angle < 270 and angle >=180)) then p.angle-=10 end
+    end -- down
+    p.dx=mid(-p.max_dx,p.dx,p.max_dx)
+    p.dy=mid(-p.max_dy,p.dy,p.max_dy)
+    p.x+=p.dx
+    p.y+=p.dy
+    if (p.x>124) then p.x=124 end
+    if (p.x<4) then p.x=4 end
+    if (p.y>124) then p.y=124 end
+    if (p.y<4) then p.y=4 end
+end
+
+function updateBgModifiers()
+    xmod = (p.x-60)/6
+    ymod = (p.y-60)/6
+end
+
+function updateBombRechargeTime()
+    if (bombRechargeT == 0 and bombs == 0) then bombs+=1 end
+    if (bombRechargeT >0) then bombRechargeT-=1 end
+end
+
+function updateShakeTimer()
+    if shake_timer == 0 then
+        shaking = false
+        shake_timer = 10
+        offset=0
+    end
+    if shaking == true then 
+        shake_timer-=1 
+        offset=0.1
+    end
+end
+
+function playerDied()
+    addExplosionParticles(40,p.x, p.y, 7, 60, 1, p.dx, p.dy)
+    sfx(2)
+    shaking = true
+    foreach(enemies, killEnemy)
+    justDied = 20
+    if lives>=2 then 
+        newRound()
+    else
+        resetGame()
+    end
+end
+
+function updateAfterDeathTimer()
+    if justDied > 0 then justDied -= 1 end
+end
+
+function updateBombTimer()
+    if bombTimer == 0 then 
+        bombInUse = false
+        bombTimer = 60
+    end
+end
+
+function managePUCollision(pu)
+    if (pu.x-xmod < p.x and 15+pu.x-xmod > p.x and pu.y-ymod < p.y and 15+pu.y-ymod > p.y) then
+        pu.catch()
+        del(fieldpus, pu)
+    end
+end
+
+function manageGate(gate) 
+    gate:move()
+    if (getPointCircleCollision(gate.x1, gate.y1, p.x, p.y, 2) or getPointCircleCollision(gate.x2, gate.y2, p.x, p.y, 2) ) then 
+        p.dx = p.dx*-1
+        p.dy = p.dy*-1
+    elseif (isTouchingPlayer(gate.x1, gate.y1, gate.x2, gate.y2, p.x, p.y)) then
+        local soundPlayed = false
+        local enemiesKilled = 0
+        for enemy in all(enemies) do
+            if (getPointCircleCollision(enemy.x, enemy.y, gate.cx, gate.cy, 40+(powerUps.bigGates*3)) == true) then
+                if soundPlayed == false then
+                    sfx(1)
+                    soundPlayed = true
+                end
+                score+=enemy.points*multiplier
+                if score > highscore then highscore = score end
+                killEnemy(enemy)
+                enemiesKilled+=1
+            end
+        end
+        shaking = true
+        sfx(0)
+        addExplosionParticles(20, gate.cx, gate.cy, 10, 40, 5, 0, 0)
+        del(gates, gate)
+        multiplier+=enemiesKilled
+        bombRechargeT-=120
+    end
+end
+
+function manageEnemy(enemy)
+    enemy:move()
+    if (getPointCircleCollision(enemy.x, enemy.y, p.x, p.y, 2) == true and bombInUse == false) then p.dead = true end --collide with player
+end
+
+function killEnemy(e)
+    e:die() 
+    del(enemies, e)
+end
+
+function manageActiveBomb()
+    bombScale = (((cos((bombTimer/120))*32)+32)/8)+1
+    bombTimer -= 1
+    for e in all(enemies) do
+        local ratiox = (e.x/128)/(e.y/128)
+        local ratioy = (e.y/128)/(e.x/128)
+        e.x*=bombScale
+        e.y*=bombScale
+        if (e.x > 130 or e.y > 130) then del(enemies, e) end
+    end
+    for p in all(particles) do
+        local ratiox = (p.x/128)/(p.y/128)
+        local ratioy = (p.y/128)/(p.x/128)
+        p.x*=bombScale
+        p.y*=bombScale
+        if (p.x > 130 or p.y > 130) then del(particles, p) end
+    end
+    for g in all(gates) do
+        local ratiox = (g.cx/128)/(g.cy/128)
+        local ratioy = (g.cy/128)/(g.cx/128)
+        g.cx*=bombScale
+        g.cy*=bombScale
+        g.x1*=bombScale
+        g.y1*=bombScale
+        g.x2*=bombScale
+        g.y2*=bombScale
+        if (g.cx > 140 or g.cy > 140) then del(gates, g) end
+    end
+    if (bombTimer == 0) then 
+        bombScale=1
+        
+        local px = p.x
+        local py = p.y
+        local pa = p.angle
+        p = Player:new{
+            x = px,
+            y = py,
+            angle = pa
+        }
+        bombInUse = false 
+    end
+end
+
+function drawGateCircle(gate)
+    circ(gate.cx, gate.cy, 40+(powerUps.bigGates*3), 1)
+end
+
+function drawGate(gate)
+    circfill(gate.x1,gate.y1,1,10)
+    circfill(gate.x2,gate.y2,1,10)
+    line(gate.x1, gate.y1, gate.x2, gate.y2, 11)
+end
+
+function drawEnemy(e)
+    e:draw()
+end
+
+function drawParticle(part)
+    rectfill(part.x, part.y, part.x, part.y, part.color)
+    part.frames+=1
+end
+
+function drawFieldPU(pu)
+    pu:draw()
 end
 
 function drawTriangle()
@@ -461,29 +474,22 @@ function drawMatrix()
     line(127, 127, 0, 127, 1)
 end
 
-function screen_shake()
-    local fade = 0.95
-    local offset_x=16-rnd(32)
-    local offset_y=16-rnd(32)
-    offset_x*=offset
-    offset_y*=offset
-    
-    camera(offset_x,offset_y)
-    offset*=fade
-    if offset<0.05 then
-      offset=0
-    end
+function drawHUD()
+    print(''..score,
+    0,0, 6)
+    print('H.SCORE: '..highscore,
+    40,0, 6)
+    print(''..multiplier..'x',
+        110,0, 6)
 end
-
 
 function drawBombBar()
     local bombMeterW = ((5400-bombRechargeT)/5400)*127
     line(0, 127, bombMeterW , 127, 12)
 end
 
-function tan(a) return sin(a)/cos(a) end
-
-Shape = {x = 0,
+Shape = {
+    x = 0,
     y = 0,
     dx = 0,
     dy = 0,
@@ -492,8 +498,8 @@ Shape = {x = 0,
     acc = 0,
     friction=0.90
 }
-
-MovingGate = {x1=0,
+MovingGate = {
+    x1=0,
     x2=0,
     y1=10,
     y2=0,
@@ -505,7 +511,8 @@ MovingGate = {x1=0,
     max_dy=0.3,
     dangle=0;
 }
-Particle = {x=0,
+Particle = {
+    x=0,
     y=0,
     dx = 0,
     dy = 0,
@@ -514,10 +521,10 @@ Particle = {x=0,
     color=10,
     frames = 0
 }
-
-PowerUp = {x=0,
-y=0,
-time=600
+PowerUp = {
+    x=0,
+    y=0,
+    time=600
 }
 
 function PowerUp:new (o)
@@ -526,21 +533,18 @@ function PowerUp:new (o)
     self.__index = self
     return o
 end
-
 function Particle:new (o)
     o = o or {}
     setmetatable(o, self)
     self.__index = self
     return o
 end
-
 function MovingGate:new (o)
     o = o or {}
     setmetatable(o, self)
     self.__index = self
     return o
 end
-
 function Shape:new (o)
     o = o or {}
     setmetatable(o, self)
@@ -551,11 +555,9 @@ end
 MoreGatesPU = PowerUp:new{
     sprite=20
 }
-
 BigGatesPU = PowerUp:new{
     sprite=21
 }
-
 Player = Shape:new{
     sprite = 0,
     x=64,
@@ -633,62 +635,20 @@ function FastE:draw()
     circfill(self.x,self.y,2,self.color)
 end
 
-function getDist(x1, y1, x2, y2)
-    local distx = x1 - x2
-    local disty = y1 - y2
-    return sqrt((distx*distx) + (disty*disty))
-end
-
-function getPointCircleCollision(px, py, cx, cy, r)
-    local dist = getDist(px, py, cx, cy)
-    if (dist <= r) then return true end
-    return false
-end
-
-function getLinePointCollision(x1, y1, x2, y2, px, py)
-    local d1 = getDist(px, py, x1, y1)
-    local d2 = getDist(px, py, x2, y2)
-    local lineLen = getDist(x1, y1, x2, y2)
-    local buffer = 0.1
-
-    if (d1+d2 >= lineLen-buffer and d1+d2 <= lineLen+buffer) then return true end
-    return false
-end
-
-function getTriPointCollision(x1, y1, x2, y2, x3, y3, px, py)
-    local areaOrig = abs( (x2-x1)*(y3-y1)-(x3-x1)*(y2-y1))
-    local area1 =    abs( (x1-px)*(y2-py)-(x2-px)*(y1-py))
-    local area2 =    abs( (x2-px)*(y3-py)-(x3-px)*(y2-py))
-    local area3 =    abs( (x3-px)*(y1-py)-(x1-px)*(y3-py))
-    if (flr(area1 + area2 + area3) == flr(areaOrig)) then
-        return true;
-    end
-    return false;
-end
-
--- Credit: https://www.lexaloffle.com/bbs/?pid=94828
-function easeinoutquad(t)
-    if(t<.5) then
-        return t*t*2
-    else
-        t-=1
-        return 1-t*t*2
-    end
-end
-
-function isTouchingPlayer(gateX1, gateY1, gateX2, gateY2, playerX, playerY)
-    -- if (getPointCircleCollision(gateX1, gateY1, playerX, playerY, 3) or getPointCircleCollision(gateX2, gateY2, playerX, playerY, 3) ) then return true end
-    local len = getDist(gateX1, gateY1, gateX2, gateY2)
-    local dot = (((playerX-gateX1)*(gateX2-gateX1)) + ((playerY-gateY1)*(gateY2-gateY1))) / (len^2)
-    local closestX = gateX1 + (dot * (gateX2-gateX1))
-    local closestY = gateY1 + (dot * (gateY2-gateY1))
-    local onSegment = getLinePointCollision(gateX1, gateY1, gateX2, gateY2, closestX, closestY)
-    if (onSegment != true) then return false end
-
-    local distance = getDist(closestX, closestY, playerX, playerY)
-
-    if (distance <= 2) then return true end
-    return false
+function MovingGate:move()
+    self.cx+=self.dx
+    self.cy+=self.dy
+    self.angle+=self.dangle
+    if (self.angle>=1) then self.angle-=1 end
+    local gateSin = sin(self.angle)
+    local gateCos = cos(self.angle)
+    self.x1 = self.cx+((10+(powerUps.bigGates*3))*gateSin);
+    self.x2 = self.cx+((-10-(powerUps.bigGates*3))*gateSin);
+    self.y1 = self.cy+((10+(powerUps.bigGates*3))*gateCos);
+    self.y2 = self.cy+((-10-(powerUps.bigGates*3))*gateCos);
+    
+    if (self.cx>120 or self.cx<0) then self.dx*=-1 end
+    if (self.cy>120 or self.cy<0) then self.dy*=-1 end
 end
 
 function Shape:move()
@@ -707,15 +667,7 @@ function Shape:move()
     if (self.y<2) then self.y=2 end
 end
 
-function Shape:die()
-    local this = self
-    for i=1,20,1 do
-        local dx = rnd(6)-3+this.dx
-        local dy = rnd(6)-3+this.dy
-        local particle = Particle:new{x=this.x, y=this.y, dx = dx, dy = dy, color = this.color, max_frames= 20}
-        add(particles, particle)
-    end
-end
+function Shape:die() addExplosionParticles(20, self.x, self.y, self.color, 20, 3, self.dx, self.dy) end
 
 function FastE:manageRipple()
 
@@ -761,16 +713,101 @@ function FastE:move()
     end
 end
 
-function moveParticles() 
-    for particle in all(particles) do
-        particle:moveParticle()
-        if (particle.frames >= particle.max_frames) then del(particles, particle) end
+-- helper
+function screen_shake()
+    local fade = 0.95
+    local offset_x=16-rnd(32)
+    local offset_y=16-rnd(32)
+    offset_x*=offset
+    offset_y*=offset
+    
+    camera(offset_x,offset_y)
+    offset*=fade
+    if offset<0.05 then
+      offset=0
     end
 end
-function Particle:moveParticle() 
-    self.x+=(self.dx*self.friction)
-    self.y+=(self.dy*self.friction)
 
+function getDist(x1, y1, x2, y2)
+    local distx = x1 - x2
+    local disty = y1 - y2
+    return sqrt((distx*distx) + (disty*disty))
+end
+
+function getPointCircleCollision(px, py, cx, cy, r)
+    local dist = getDist(px, py, cx, cy)
+    if (dist <= r) then return true end
+    return false
+end
+
+function getLinePointCollision(x1, y1, x2, y2, px, py)
+    local d1 = getDist(px, py, x1, y1)
+    local d2 = getDist(px, py, x2, y2)
+    local lineLen = getDist(x1, y1, x2, y2)
+    local buffer = 0.1
+
+    if (d1+d2 >= lineLen-buffer and d1+d2 <= lineLen+buffer) then return true end
+    return false
+end
+
+function getTriPointCollision(x1, y1, x2, y2, x3, y3, px, py)
+    local areaOrig = abs( (x2-x1)*(y3-y1)-(x3-x1)*(y2-y1))
+    local area1 =    abs( (x1-px)*(y2-py)-(x2-px)*(y1-py))
+    local area2 =    abs( (x2-px)*(y3-py)-(x3-px)*(y2-py))
+    local area3 =    abs( (x3-px)*(y1-py)-(x1-px)*(y3-py))
+    if (flr(area1 + area2 + area3) == flr(areaOrig)) then
+        return true;
+    end
+    return false;
+end
+
+function isTouchingPlayer(gateX1, gateY1, gateX2, gateY2, playerX, playerY)
+    -- if (getPointCircleCollision(gateX1, gateY1, playerX, playerY, 3) or getPointCircleCollision(gateX2, gateY2, playerX, playerY, 3) ) then return true end
+    local len = getDist(gateX1, gateY1, gateX2, gateY2)
+    local dot = (((playerX-gateX1)*(gateX2-gateX1)) + ((playerY-gateY1)*(gateY2-gateY1))) / (len^2)
+    local closestX = gateX1 + (dot * (gateX2-gateX1))
+    local closestY = gateY1 + (dot * (gateY2-gateY1))
+    local onSegment = getLinePointCollision(gateX1, gateY1, gateX2, gateY2, closestX, closestY)
+    if (onSegment != true) then return false end
+
+    local distance = getDist(closestX, closestY, playerX, playerY)
+
+    if (distance <= 2) then return true end
+    return false
+end
+
+function easeinoutquad(t)
+    if(t<.5) then
+        return t*t*2
+    else
+        t-=1
+        return 1-t*t*2
+    end
+end
+
+function tan(a) return sin(a)/cos(a) end
+
+function addExplosionParticles(n, x, y, c, duration, speed, dxMod, dyMod)
+    for i=1,n,1 do
+        local dx = rnd(speed*2)-(speed)+dxMod
+        local dy = rnd(speed*2)-(speed)+dyMod
+        local particle = Particle:new{x=x, y=y, dx = dx, dy = dy, color = c, max_frames= duration}
+        add(particles, particle)
+    end
+end
+--  end helper
+
+-- Credit: https://www.lexaloffle.com/bbs/?pid=94828
+
+
+function moveParticles() 
+    foreach(particles, moveParticle)
+end
+
+function moveParticle(part)
+    part.x+=(part.dx*part.friction)
+    part.y+=(part.dy*part.friction)
+    if (part.frames >= part.max_frames) then del(particles, part) end
 end
 
 function spr_r(s,x,y,a,w,h)
