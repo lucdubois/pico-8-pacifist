@@ -2,129 +2,33 @@ pico-8 cartridge // http://www.pico-8.com
 version 32
 __lua__
 
-xmod=0
-ymod=0
-offset = 0
-shaking = false
-shake_timer=10
-score=0
-multiplier=1
-highscore=0
-lives=3
-gtms=0
-message='the pacifist'
-messageTimer=180
-bombs=1
-bombInUse=false
-bombTimer=60
-bombScale = 1
-bombRechargeT=0
-justDied=0
-powerUps={
-    moreGates=0,
-    bigGates=0
-}
-difficulty=0 --0 to 1
-
 function _init()
-    save('@clip')
+    xmod=0
+    ymod=0
     offset = 0
     shaking = false
     shake_timer=10
     score=0
     multiplier=1
-    music(0)
-end
-
-function newRound() 
-    enemies = {}
-    gates = {}
-    offset = 0
-    shaking = false
-    shake_timer=10
-    multiplier=1
-    p = Player:new{}
-    lives -=1
-end
-
-function resetGame() 
-    newRound()
+    highscore=0
     lives=3
-    gtms = 0
-    score=0
-    music(0)
-    messageTimer=120
-    message='try again'
+    gtms=0
+    message='the pacifist'
+    messageTimer=180
     bombs=1
     bombInUse=false
     bombTimer=60
     bombScale = 1
     bombRechargeT=0
+    justDied=0
     powerUps={
         moreGates=0,
         bigGates=0
     }
-    fieldpus = {}
-end
-
-function drawMessage()
-    if (messageTimer > 0) then
-        print(message, 64-#message*2, 61, 11)
-        messageTimer -=1
-    end
-end
-
-function enemyCanSpawn(en)
-    if (en.x < 2) then en.x = 2 end
-    if (en.y < 2) then en.y = 2 end
-    if (en.x > 126) then en.x = 126 end
-    if (en.y > 126) then en.y = 126 end
-    if getDist(en.x, en.y, p.x, p.y) < 42 then return false end
-
-    local pa = p.angle-90%360
-    local angle1 = (pa-30)/360
-    local angle2 = (pa+30)/360
-    local x1 = (sin(angle1)*100)+p.x
-    local y1 = (cos(angle1)*100)+p.y
-    local x2 = (sin(angle2)*100)+p.x
-    local y2 = (cos(angle2)*100)+p.y
-    if getTriPointCollision(x1, y1, x2, y2, p.x, p.y, en.x, en.y) == true then return false end
-    return true
-end
-
-function spawnEnemy(en)
-    repeat
-        local angle = rnd()
-        en.x = ((rnd(20)+42)*sin(angle))+p.x
-        en.y = ((rnd(20)+42)*cos(angle))+p.y
-    until enemyCanSpawn(en) == true
-    add(enemies, en)
-end
-
-function useBomb()
-    printh(bombs..', '..justDied, 'debug.txt')
-    if (bombs > 0 and justDied == 0 and bombInUse == false) then
-        bombInUse = true
-        message='dimensional shift'
-        messageTimer=60
-        sfx(4, 2)
-        bombs-=1
-        bombRechargeT=5400
-    else
-        sfx(12, 2)
-    end
-end
-function spawnTrail(o, r)
-        local ang = rnd()
-        local px = sin(ang)*r
-        local py = cos(ang)*r
-        local particle = Particle:new{
-            max_frames=5,
-            x = o.x+px,
-            y = o.y+py,
-            color = o.color
-        }
-        add(particles, particle)
+    difficulty=0 --0 to 1
+    score2 = {0, 0, 0}
+    highscore2 = {0, 0, 0}
+    music(0)
 end
 
 function _update60()
@@ -169,6 +73,38 @@ function _draw()
     spr_r(lives-1, p.x-4, p.y-4, p.angle, 1, 1) --draw player
     drawBombBar()
     drawMessage()
+end
+
+function newRound() 
+    enemies = {}
+    gates = {}
+    offset = 0
+    shaking = false
+    shake_timer=10
+    multiplier=1
+    p = Player:new{}
+    lives -=1
+end
+
+function resetGame() 
+    newRound()
+    lives=3
+    gtms = 0
+    score=0
+    score2 = {0, 0, 0}
+    music(0)
+    messageTimer=120
+    message='try again'
+    bombs=1
+    bombInUse=false
+    bombTimer=60
+    bombScale = 1
+    bombRechargeT=0
+    powerUps={
+        moreGates=0,
+        bigGates=0
+    }
+    fieldpus = {}
 end
 
 function spawnStuff()
@@ -217,10 +153,36 @@ function spawnStuff()
     end
 end
 
+function enemyCanSpawn(en)
+    if (en.x < 2) then en.x = 2 end
+    if (en.y < 2) then en.y = 2 end
+    if (en.x > 126) then en.x = 126 end
+    if (en.y > 126) then en.y = 126 end
+    if getDist(en.x, en.y, p.x, p.y) < 42 then return false end
+
+    local pa = p.angle-90%360
+    local angle1 = (pa-30)/360
+    local angle2 = (pa+30)/360
+    local x1 = (sin(angle1)*100)+p.x
+    local y1 = (cos(angle1)*100)+p.y
+    local x2 = (sin(angle2)*100)+p.x
+    local y2 = (cos(angle2)*100)+p.y
+    if getTriPointCollision(x1, y1, x2, y2, p.x, p.y, en.x, en.y) == true then return false end
+    return true
+end
+
+function spawnEnemy(en)
+    repeat
+        local angle = rnd()
+        en.x = ((rnd(20)+42)*sin(angle))+p.x
+        en.y = ((rnd(20)+42)*cos(angle))+p.y
+    until enemyCanSpawn(en) == true
+    add(enemies, en)
+end
+
 function newGate()
     local gate = MovingGate:new{}
     local bigGatesPU = powerUps.bigGates*2
-    printh(bigGatesPU, 'debug.txt')
     gate.angle = rnd(0.5)+0.5;
     local s = sin(gate.angle);
     gate.cx = rnd(116);
@@ -229,6 +191,34 @@ function newGate()
     gate.dy = rnd(gate.max_dy)
     gate.dangle = rnd(0.012)-0.006
     add(gates, gate)
+end
+
+function adjustScoreDistribution()
+    if (score2[1] > 999) then 
+        score2[2]+= flr(score2[1]/1000)
+        score2[1] = score2[1]%1000
+    end
+    if (score2[2] > 999) then 
+        score2[3]+= flr(score2[2]/1000)
+        score2[2] = score2[2]%1000
+    end
+end
+
+function adjustHighscore()
+    if score2[3] > highscore2[3] then 
+        updateHighscore()
+    elseif score2[3] == highscore2[3] and score2[2] > highscore2[2] then
+        updateHighscore()
+    elseif score2[3] == highscore2[3] and score2[2] == highscore2[2] and score2[1] > highscore2[1] then
+        updateHighscore()
+    end
+
+end
+
+function updateHighscore()
+    highscore2[3] = score2[3]
+    highscore2[2] = score2[2]
+    highscore2[1] = score2[1]
 end
 
 function updatePStuff()
@@ -269,6 +259,19 @@ function updatePStuff()
     if (p.x<4) then p.x=4 end
     if (p.y>124) then p.y=124 end
     if (p.y<4) then p.y=4 end
+end
+
+function spawnTrail(o, r)
+    local ang = rnd()
+    local px = sin(ang)*r
+    local py = cos(ang)*r
+    local particle = Particle:new{
+        max_frames=5,
+        x = o.x+px,
+        y = o.y+py,
+        color = o.color
+    }
+    add(particles, particle)
 end
 
 function updateBgModifiers()
@@ -330,22 +333,20 @@ function manageGate(gate)
         p.dx = p.dx*-1
         p.dy = p.dy*-1
     elseif (isTouchingPlayer(gate.x1, gate.y1, gate.x2, gate.y2, p.x, p.y)) then
-        local soundPlayed = false
         local enemiesKilled = 0
         for enemy in all(enemies) do
             if (getPointCircleCollision(enemy.x, enemy.y, gate.cx, gate.cy, 40+(powerUps.bigGates*3)) == true) then
-                if soundPlayed == false then
-                    sfx(1)
-                    soundPlayed = true
-                end
+                score2[1]+=(enemy.points*multiplier)%1000
+                score2[2]+=flr((enemy.points*multiplier)/1000)
+                adjustScoreDistribution()
                 score+=enemy.points*multiplier
-                if score > highscore then highscore = score end
                 killEnemy(enemy)
                 enemiesKilled+=1
             end
         end
+        adjustHighscore()
         shaking = true
-        sfx(0)
+        if enemiesKilled == 0 then sfx(0) else sfx(1) end
         addExplosionParticles(20, gate.cx, gate.cy, 10, 40, 5, 0, 0)
         del(gates, gate)
         multiplier+=enemiesKilled
@@ -361,6 +362,19 @@ end
 function killEnemy(e)
     e:die() 
     del(enemies, e)
+end
+
+function useBomb()
+    if (bombs > 0 and justDied == 0 and bombInUse == false) then
+        bombInUse = true
+        message='dimensional shift'
+        messageTimer=60
+        sfx(4, 2)
+        bombs-=1
+        bombRechargeT=5400
+    else
+        sfx(12, 2)
+    end
 end
 
 function manageActiveBomb()
@@ -475,17 +489,39 @@ function drawMatrix()
 end
 
 function drawHUD()
-    print(''..score,
+    print(getScoreString(score2),
     0,0, 6)
-    print('H.SCORE: '..highscore,
+    print('H.SCORE: '..getScoreString(highscore2),
     40,0, 6)
     print(''..multiplier..'x',
         110,0, 6)
 end
 
+function getScoreString(sc)
+    local ret = '0';
+    if (sc[1] > 0 or sc[2] > 0 or sc[3] > 0) then
+        local prefix = ''
+        if (sc[2] > 0 or sc[3] > 0) and sc[1] < 10 then prefix = '00' elseif (sc[2] > 0 or sc[3] > 0) and sc[1] < 100 then prefix = '0' end
+        ret = prefix..sc[1]
+        if (sc[2] > 0 and sc[3] > 0) then
+            if sc[2] < 10 then prefix = '00' elseif sc[2] < 100 then prefix = '0' else prefix = '' end
+            ret = prefix..sc[2]..ret
+        elseif (sc[2] > 0 and sc[3] == 0) then ret = sc[2]..ret end
+    end
+    if (sc[3] > 0) then ret = sc[3]..ret end
+    return ret
+end
+
 function drawBombBar()
     local bombMeterW = ((5400-bombRechargeT)/5400)*127
     line(0, 127, bombMeterW , 127, 12)
+end
+
+function drawMessage()
+    if (messageTimer > 0) then
+        print(message, 64-#message*2, 61, 11)
+        messageTimer -=1
+    end
 end
 
 Shape = {
