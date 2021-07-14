@@ -251,6 +251,7 @@ function _update60() --called at 60fps
         if (gt % (5-powerUps.moreGates) == 0) then
             local gate = MovingGate:new{}
             local bigGatesPU = powerUps.bigGates*2
+            printh(bigGatesPU, 'debug.txt')
             gate.angle = rnd(0.5)+0.5;
             local s = sin(gate.angle);
             gate.cx = rnd(116);
